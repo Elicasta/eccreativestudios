@@ -89,6 +89,12 @@ export const PIPELINE_STAGES = [
 
 export const PIPELINE_LABELS = Object.fromEntries(PIPELINE_STAGES.map((stage) => [stage.key, stage.label]));
 
+export const BOOKING_STEPS = [
+  { key: "quoteAccepted", label: "Quote accepted" },
+  { key: "contractSigned", label: "Contract signed" },
+  { key: "paymentReceived", label: "Payment received" },
+];
+
 const basePackages = [
   {
     id: "pkg_signature",
@@ -376,6 +382,10 @@ export function createInitialState() {
         locationId: "loc_light_haus",
         prepStatus: "awaiting_client_date",
         galleryStatus: "not_ready",
+        projectCreatedAt: "Jun 18, 2026",
+        portalAccessSentAt: "Jun 18, 2026",
+        availabilityEmailSentAt: "Jun 18, 2026",
+        calendarInviteSentAt: "",
         notes: "Deposit received. Waiting for final date confirmation through portal.",
       },
       {
@@ -391,6 +401,10 @@ export function createInitialState() {
         locationId: "loc_light_haus",
         prepStatus: "not_started",
         galleryStatus: "not_ready",
+        projectCreatedAt: "",
+        portalAccessSentAt: "",
+        availabilityEmailSentAt: "",
+        calendarInviteSentAt: "",
         notes: "Quote sent. Awaiting client decision.",
       },
       {
@@ -406,6 +420,10 @@ export function createInitialState() {
         locationId: "loc_stockyards",
         prepStatus: "contract_out",
         galleryStatus: "not_ready",
+        projectCreatedAt: "",
+        portalAccessSentAt: "",
+        availabilityEmailSentAt: "",
+        calendarInviteSentAt: "",
         notes: "Contract has been sent. Payment schedule pending signature.",
       },
     ],
@@ -482,6 +500,22 @@ export function createInitialState() {
       { id: "act_3", clientId: clientAshleyId, text: "Quote QUO-1002 sent to Ashley Morgan", createdAt: "Jun 22, 2026" },
       { id: "act_4", clientId: inquiryDanielId, text: "New inquiry received from Daniel Andersson", createdAt: "Jun 22, 2026" },
     ],
+    emailLogs: [
+      {
+        id: "email_1",
+        clientId: clientSarahId,
+        kind: "invoice",
+        subject: "Your invoice from EC Creative Studios",
+        sentAt: "Jun 12, 2026",
+      },
+      {
+        id: "email_2",
+        clientId: clientSarahId,
+        kind: "portal_access",
+        subject: "Your EC Creative Studios portal is ready",
+        sentAt: "Jun 18, 2026",
+      },
+    ],
   };
 }
 
@@ -509,7 +543,10 @@ export function getClientBundle(state, clientId) {
   const messages = state.messages.filter((entry) => entry.clientId === clientId);
   const notes = state.notes.filter((entry) => entry.clientId === clientId);
   const activity = state.activity.filter((entry) => entry.clientId === clientId);
+  const emailLogs = (state.emailLogs || []).filter((entry) => entry.clientId === clientId);
   const stage = derivePipelineStage({ inquiry, quotes, contracts, invoices, session });
+  const booking = deriveBookingState({ inquiry, quotes, contracts, invoices, session });
+  const projectStatus = deriveProjectStatus(session, booking, emailLogs);
 
   return {
     client,
@@ -523,24 +560,73 @@ export function getClientBundle(state, clientId) {
     messages,
     notes,
     activity,
+    emailLogs,
     stage,
+    booking,
+    projectStatus,
     primaryQuote: quotes[0] || null,
     primaryContract: contracts[0] || null,
     primaryInvoice: invoices[0] || null,
   };
 }
 
+export function deriveBookingState(bundle) {
+  const { quotes = [], contracts = [], invoices = [] } = bundle;
+  const acceptedQuote = quotes.find((entry) => entry.status === "accepted");
+  const signedContract = contracts.find((entry) => entry.status === "signed");
+  const paidInvoice = invoices.find(
+    (entry) => ["deposit", "full"].includes(entry.kind) && entry.status === "paid",
+  );
+  const invoiceSent = invoices.find((entry) => entry.status === "sent" || entry.status === "partially_paid");
+
+  const steps = {
+    quoteAccepted: Boolean(acceptedQuote),
+    contractSigned: Boolean(signedContract),
+    paymentReceived: Boolean(paidInvoice),
+  };
+
+  return {
+    steps,
+    isBooked: Object.values(steps).every(Boolean),
+    invoiceSent: Boolean(invoiceSent),
+    completionCount: Object.values(steps).filter(Boolean).length,
+    acceptedQuote,
+    signedContract,
+    paidInvoice,
+  };
+}
+
+function deriveProjectStatus(session, booking, emailLogs) {
+  const projectCreated = Boolean(session?.projectCreatedAt || booking.isBooked);
+  const portalReady = projectCreated;
+  const portalAccessSent = Boolean(session?.portalAccessSentAt || emailLogs.some((entry) => entry.kind === "portal_access"));
+  const availabilitySent = Boolean(session?.availabilityEmailSentAt || emailLogs.some((entry) => entry.kind === "availability"));
+  const calendarInviteSent = Boolean(session?.calendarInviteSentAt || emailLogs.some((entry) => entry.kind === "calendar_invite"));
+
+  return {
+    projectCreated,
+    projectCreatedAt: session?.projectCreatedAt || "",
+    portalReady,
+    portalAccessSent,
+    portalAccessSentAt: session?.portalAccessSentAt || "",
+    availabilitySent,
+    availabilitySentAt: session?.availabilityEmailSentAt || "",
+    calendarInviteSent,
+    calendarInviteSentAt: session?.calendarInviteSentAt || "",
+  };
+}
+
 export function derivePipelineStage(bundle) {
   const { inquiry, quotes = [], contracts = [], invoices = [], session } = bundle;
+  const booking = deriveBookingState(bundle);
   const quote = quotes[0];
   const contract = contracts[0];
-  const depositInvoice = invoices.find((entry) => entry.kind === "deposit" && entry.status === "paid");
   const sentInvoice = invoices.find((entry) => ["sent", "partially_paid", "paid"].includes(entry.status));
 
   if (inquiry?.status === "lost") return "lost";
   if (session?.status === "completed") return "completed";
   if (session?.status === "scheduled" && session.sessionDate) return "session_scheduled";
-  if (depositInvoice) return "deposit_paid";
+  if (booking.isBooked) return "deposit_paid";
   if (sentInvoice) return "invoice_sent";
   if (contract?.status === "signed") return "contract_signed";
   if (contract?.status === "sent") return "contract_sent";
@@ -606,6 +692,10 @@ export function crmReducer(state, action) {
             locationId: state.locations[0]?.id || null,
             prepStatus: "not_started",
             galleryStatus: "not_ready",
+            projectCreatedAt: "",
+            portalAccessSentAt: "",
+            availabilityEmailSentAt: "",
+            calendarInviteSentAt: "",
             notes: "Lead approved. Build proposal next.",
           },
           ...state.sessions,
@@ -802,10 +892,9 @@ export function crmReducer(state, action) {
       const field = action.type === "send_contract" ? "sentAt" : "signedAt";
       const contract = state.contracts.find((entry) => entry.id === action.contractId);
       if (!contract) return state;
-      return withActivity(
-        {
-          ...state,
-          contracts: state.contracts.map((entry) =>
+      const nextState = {
+        ...state,
+        contracts: state.contracts.map((entry) =>
             entry.id === action.contractId
               ? {
                   ...entry,
@@ -815,7 +904,7 @@ export function crmReducer(state, action) {
                 }
               : entry,
           ),
-          sessions: state.sessions.map((entry) =>
+        sessions: state.sessions.map((entry) =>
             entry.contractId === action.contractId
               ? {
                   ...entry,
@@ -824,7 +913,9 @@ export function crmReducer(state, action) {
                 }
               : entry,
           ),
-        },
+      };
+      return withActivity(
+        maybeCreateProjectForClient(nextState, contract.clientId),
         getClientBundle(state, contract.clientId).client?.name || "Client",
         `${contract.number} ${status === "sent" ? "sent for signature." : "signed by client."}`,
       );
@@ -910,6 +1001,16 @@ export function crmReducer(state, action) {
           sessions: state.sessions.map((entry) =>
             entry.id === invoice.sessionId ? { ...entry, status: "payment_pending", prepStatus: "invoice_sent" } : entry,
           ),
+          emailLogs: [
+            {
+              id: nextId("email"),
+              clientId: invoice.clientId,
+              kind: "invoice",
+              subject: `${invoice.number} from EC Creative Studios`,
+              sentAt: dayStamp(),
+            },
+            ...(state.emailLogs || []),
+          ],
         },
         getClientBundle(state, invoice.clientId).client?.name || "Client",
         `${invoice.number} sent to client.`,
@@ -930,42 +1031,141 @@ export function crmReducer(state, action) {
       const status =
         updatedInvoice.balanceDue <= 0 ? "paid" : updatedInvoice.amountPaid > 0 ? "partially_paid" : updatedInvoice.status;
       const finalInvoice = { ...updatedInvoice, status };
+      const nextState = {
+        ...state,
+        invoices: state.invoices.map((entry) => (entry.id === action.invoiceId ? finalInvoice : entry)),
+        payments: [
+          {
+            id: nextId("payment"),
+            clientId: invoice.clientId,
+            invoiceId: invoice.id,
+            amount,
+            method: action.method || "Manual",
+            paidAt: dayStamp(),
+            note: action.note || "",
+          },
+          ...state.payments,
+        ],
+        sessions: state.sessions.map((entry) =>
+          entry.id === invoice.sessionId
+            ? {
+                ...entry,
+                status:
+                  invoice.kind === "deposit" && finalInvoice.status === "paid"
+                    ? "awaiting_schedule"
+                    : finalInvoice.status === "paid"
+                      ? entry.status
+                      : "payment_pending",
+                prepStatus:
+                  invoice.kind === "deposit" && finalInvoice.status === "paid"
+                    ? "awaiting_client_date"
+                    : entry.prepStatus,
+              }
+            : entry,
+        ),
+      };
+      return withActivity(
+        maybeCreateProjectForClient(nextState, invoice.clientId),
+        getClientBundle(state, invoice.clientId).client?.name || "Client",
+        `Payment of ${formatCurrency(amount)} applied to ${invoice.number}.`,
+      );
+    }
+
+    case "send_portal_access": {
+      const client = state.clients.find((entry) => entry.id === action.clientId);
+      if (!client) return state;
+      const nextState = {
+        ...state,
+        sessions: state.sessions.map((entry) =>
+          entry.clientId === action.clientId ? { ...entry, portalAccessSentAt: entry.portalAccessSentAt || dayStamp() } : entry,
+        ),
+        emailLogs: [
+          {
+            id: nextId("email"),
+            clientId: action.clientId,
+            kind: "portal_access",
+            subject: "Your EC Creative Studios portal is ready",
+            sentAt: dayStamp(),
+          },
+          ...(state.emailLogs || []),
+        ],
+      };
+      return withActivity(
+        nextState,
+        client.name,
+        "Portal access email sent to client.",
+      );
+    }
+
+    case "send_booking_reminder": {
+      const client = state.clients.find((entry) => entry.id === action.clientId);
+      if (!client) return state;
       return withActivity(
         {
           ...state,
-          invoices: state.invoices.map((entry) => (entry.id === action.invoiceId ? finalInvoice : entry)),
-          payments: [
+          emailLogs: [
             {
-              id: nextId("payment"),
-              clientId: invoice.clientId,
-              invoiceId: invoice.id,
-              amount,
-              method: action.method || "Manual",
-              paidAt: dayStamp(),
-              note: action.note || "",
+              id: nextId("email"),
+              clientId: action.clientId,
+              kind: "booking_reminder",
+              subject: "Your session is not booked yet",
+              sentAt: dayStamp(),
             },
-            ...state.payments,
+            ...(state.emailLogs || []),
           ],
-          sessions: state.sessions.map((entry) =>
-            entry.id === invoice.sessionId
-              ? {
-                  ...entry,
-                  status:
-                    invoice.kind === "deposit" && finalInvoice.status === "paid"
-                      ? "awaiting_schedule"
-                      : finalInvoice.status === "paid"
-                        ? entry.status
-                        : "payment_pending",
-                  prepStatus:
-                    invoice.kind === "deposit" && finalInvoice.status === "paid"
-                      ? "awaiting_client_date"
-                      : entry.prepStatus,
-                }
-              : entry,
-          ),
         },
-        getClientBundle(state, invoice.clientId).client?.name || "Client",
-        `Payment of ${formatCurrency(amount)} applied to ${invoice.number}.`,
+        client.name,
+        "Booking reminder email sent.",
+      );
+    }
+
+    case "send_availability": {
+      const client = state.clients.find((entry) => entry.id === action.clientId);
+      if (!client) return state;
+      return withActivity(
+        {
+          ...state,
+          sessions: state.sessions.map((entry) =>
+            entry.clientId === action.clientId ? { ...entry, availabilityEmailSentAt: entry.availabilityEmailSentAt || dayStamp() } : entry,
+          ),
+          emailLogs: [
+            {
+              id: nextId("email"),
+              clientId: action.clientId,
+              kind: "availability",
+              subject: "Choose your EC Creative Studios session date",
+              sentAt: dayStamp(),
+            },
+            ...(state.emailLogs || []),
+          ],
+        },
+        client.name,
+        "Availability email sent with date selection link.",
+      );
+    }
+
+    case "send_calendar_invite": {
+      const client = state.clients.find((entry) => entry.id === action.clientId);
+      if (!client) return state;
+      return withActivity(
+        {
+          ...state,
+          sessions: state.sessions.map((entry) =>
+            entry.clientId === action.clientId ? { ...entry, calendarInviteSentAt: entry.calendarInviteSentAt || dayStamp() } : entry,
+          ),
+          emailLogs: [
+            {
+              id: nextId("email"),
+              clientId: action.clientId,
+              kind: "calendar_invite",
+              subject: "Your EC Creative Studios session calendar invite",
+              sentAt: dayStamp(),
+            },
+            ...(state.emailLogs || []),
+          ],
+        },
+        client.name,
+        "Calendar invite email sent with ICS attachment.",
       );
     }
 
@@ -984,6 +1184,7 @@ export function crmReducer(state, action) {
                   sessionTime: action.time,
                   prepStatus: "scheduled",
                   locationId: action.locationId || entry.locationId,
+                  projectCreatedAt: entry.projectCreatedAt || dayStamp(),
                   notes: "Session date secured through portal.",
                 }
               : entry,
@@ -1054,6 +1255,19 @@ export function crmReducer(state, action) {
     default:
       return state;
   }
+}
+
+function maybeCreateProjectForClient(state, clientId) {
+  const bundle = getClientBundle(state, clientId);
+  if (!bundle.booking.isBooked) return state;
+  return {
+    ...state,
+    sessions: state.sessions.map((entry) =>
+      entry.clientId === clientId && !entry.projectCreatedAt
+        ? { ...entry, projectCreatedAt: dayStamp() }
+        : entry,
+    ),
+  };
 }
 
 function withActivity(state, clientName, text) {
