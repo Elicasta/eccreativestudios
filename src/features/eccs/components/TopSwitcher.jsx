@@ -10,7 +10,7 @@ export default function TopSwitcher({ app, setApp, stageLabel }) {
       <div className="flex items-center gap-3 min-w-0">
         <span className="ecc-display text-white text-base sm:text-lg whitespace-nowrap">EC Creative Studios</span>
         <span className="hidden sm:inline text-xs ecc-body" style={{ color: C.taupe }}>
-          prototype skeleton · live stage: {stageLabel}
+          local crm demo · selected pipeline stage: {stageLabel}
         </span>
       </div>
       <div className="flex rounded-full p-0.5" style={{ background: "rgba(255,255,255,0.1)" }}>

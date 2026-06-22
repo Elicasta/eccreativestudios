@@ -2,466 +2,408 @@
 
 import React, { useState } from "react";
 import {
-  Home, Inbox, Users, FolderKanban, Camera, Calendar as CalendarIcon,
-  FileText, PenLine, Receipt, CreditCard, Mail, Workflow, LayoutTemplate,
-  Settings, Palette, UserCog, Bell, HelpCircle, Search, Plus, Menu, X,
-  ChevronRight, ChevronDown, Check, CheckCircle2, SlidersHorizontal,
-  Image as ImageIcon, MessageCircle, MapPin, CloudSun, ListChecks,
-  Download, ArrowRight, Lock, Sparkles, ClipboardList, Send, ChevronLeft,
-  Circle, Dot, MoreHorizontal
+  CalendarDays,
+  CreditCard,
+  FileSignature,
+  FileText,
+  Image as ImageIcon,
+  Lock,
+  MapPin,
+  Menu,
+  MessageCircle,
+  Send,
+  Sparkles,
 } from "lucide-react";
 import { C } from "../lib/brand";
-import { docLabel, docTone } from "../lib/pipeline";
-import { SARAH, getSessionInfo } from "../lib/mock-data";
+import { formatCurrency, PIPELINE_LABELS } from "../lib/crm";
 import { Card, Pill, StatusLight } from "../components/ui";
-import DocModal from "../components/DocModal";
 
-const NAV_CLIENT = [
-  { key: "overview", label: "Overview", icon: Home },
-  { key: "details", label: "Session Details", icon: ClipboardList },
-  { key: "vision", label: "Vision Board", icon: Sparkles },
-  { key: "documents", label: "Documents", icon: FileText },
-  { key: "messages", label: "Messages", icon: MessageCircle },
-  { key: "payments", label: "Payments", icon: CreditCard },
-  { key: "plan", label: "Plan & Prep", icon: ListChecks },
-  { key: "gallery", label: "Gallery", icon: ImageIcon },
+const NAV = [
+  { key: "overview", label: "Overview" },
+  { key: "documents", label: "Documents" },
+  { key: "details", label: "Session Details" },
+  { key: "vision", label: "Vision Board" },
+  { key: "messages", label: "Messages" },
+  { key: "payments", label: "Payments" },
 ];
 
-export default function ClientApp(props) {
+const SLOT_OPTIONS = [
+  { date: "Jul 18, 2026", time: "9:00 AM", locationName: "The Light Haus Studio" },
+  { date: "Jul 20, 2026", time: "4:30 PM", locationName: "The Light Haus Studio" },
+  { date: "Jul 22, 2026", time: "10:00 AM", locationName: "Dallas Arboretum" },
+];
+
+export default function ClientApp({ selectedBundle, actions }) {
   const [page, setPage] = useState("overview");
   const [drawer, setDrawer] = useState(false);
-  const go = (p) => { setPage(p); setDrawer(false); };
+
+  if (!selectedBundle.client) {
+    return null;
+  }
 
   return (
     <div className="flex" style={{ minHeight: "calc(100vh - 44px)" }}>
-      <aside className="hidden md:flex md:flex-col w-60 shrink-0 px-4 py-6" style={{ background: C.charcoal }}>
-        <ClientSidebar page={page} go={go} />
+      <aside className="hidden md:flex md:flex-col w-64 shrink-0 px-4 py-6" style={{ background: C.charcoal }}>
+        <PortalSidebar page={page} setPage={setPage} clientName={selectedBundle.client.name} sessionType={selectedBundle.client.sessionType} />
       </aside>
 
       {drawer && (
         <div className="fixed inset-0 z-40 flex md:hidden">
           <div className="w-64 px-4 py-6 overflow-y-auto" style={{ background: C.charcoal }}>
-            <ClientSidebar page={page} go={go} onClose={() => setDrawer(false)} />
+            <PortalSidebar page={page} setPage={(nextPage) => { setPage(nextPage); setDrawer(false); }} clientName={selectedBundle.client.name} sessionType={selectedBundle.client.sessionType} />
           </div>
-          <div className="flex-1" style={{ background: "rgba(0,0,0,0.4)" }} onClick={() => setDrawer(false)} />
+          <div className="flex-1" style={{ background: "rgba(0,0,0,0.35)" }} onClick={() => setDrawer(false)} />
         </div>
       )}
 
       <main className="flex-1 min-w-0 pb-20 md:pb-0">
         <div className="flex items-center gap-3 px-4 sm:px-6 py-4" style={{ borderBottom: `1px solid ${C.line}` }}>
-          <button className="md:hidden" onClick={() => setDrawer(true)}><Menu size={20} color={C.ink} /></button>
-          <p className="text-sm flex-1" style={{ color: C.charcoal }}>Welcome, Sarah</p>
-          <Bell size={18} color={C.charcoal} />
+          <button className="md:hidden" onClick={() => setDrawer(true)}>
+            <Menu size={20} color={C.ink} />
+          </button>
+          <div className="flex-1">
+            <p className="text-sm" style={{ color: C.charcoal }}>Welcome back,</p>
+            <p className="ecc-display text-2xl" style={{ color: C.ink }}>{selectedBundle.client.name}</p>
+          </div>
+          <StatusLight tone={selectedBundle.stage === "deposit_paid" || selectedBundle.stage === "session_scheduled" ? "green" : "yellow"} label={PIPELINE_LABELS[selectedBundle.stage]} />
         </div>
-        <div className="p-4 sm:p-6 lg:p-8 max-w-3xl lg:max-w-4xl mx-auto">
-          {page === "overview" && <ClientOverview {...props} go={go} />}
-          {page === "details" && (props.status.projectCreated ? <ClientDetails portal={props.portal} /> : <PortalLocked />)}
-          {page === "vision" && (props.status.projectCreated ? <ClientVisionBoard portal={props.portal} /> : <PortalLocked />)}
-          {page === "documents" && <ClientDocuments {...props} />}
-          {page === "messages" && (props.status.projectCreated ? <ClientMessages messages={props.messages} setMessages={props.setMessages} /> : <PortalLocked body="Direct messaging opens once your session is booked. Need something before then? Use the message box on your quote or contract." />)}
-          {page === "payments" && <ClientPayments {...props} />}
-          {page === "plan" && (props.status.projectCreated ? <ClientPlan /> : <PortalLocked />)}
-          {page === "gallery" && <ClientGallery {...props} />}
+        <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
+          {page === "overview" && <OverviewPage selectedBundle={selectedBundle} actions={actions} />}
+          {page === "documents" && <DocumentsPage selectedBundle={selectedBundle} actions={actions} />}
+          {page === "details" && <DetailsPage selectedBundle={selectedBundle} />}
+          {page === "vision" && <VisionPage selectedBundle={selectedBundle} />}
+          {page === "messages" && <MessagesPage selectedBundle={selectedBundle} actions={actions} />}
+          {page === "payments" && <PaymentsPage selectedBundle={selectedBundle} actions={actions} />}
         </div>
       </main>
-
-      {/* mobile bottom tab bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex justify-around py-2" style={{ background: "#fff", borderTop: `1px solid ${C.line}` }}>
-        {[NAV_CLIENT[0], NAV_CLIENT[3], NAV_CLIENT[4], NAV_CLIENT[5]].map((it) => {
-          const Icon = it.icon;
-          const active = page === it.key;
-          return (
-            <button key={it.key} onClick={() => go(it.key)} className="flex flex-col items-center gap-0.5 px-2">
-              <Icon size={18} color={active ? C.forest : C.taupe} />
-              <span className="text-[10px]" style={{ color: active ? C.forest : C.taupe }}>{it.label.split(" ")[0]}</span>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
 
-function ClientSidebar({ page, go, onClose }) {
+function PortalSidebar({ page, setPage, clientName, sessionType }) {
   return (
     <>
-      <div className="flex items-center justify-between mb-8 px-1">
-        <div>
-          <p className="ecc-display text-white text-xl leading-none">EC</p>
-          <p className="text-[10px] uppercase tracking-widest" style={{ color: C.taupe }}>Creative Studios</p>
-        </div>
-        {onClose && <button onClick={onClose}><X size={18} color={C.taupe} /></button>}
+      <div className="mb-8 px-1">
+        <p className="ecc-display text-white text-2xl leading-none">EC</p>
+        <p className="text-[10px] uppercase tracking-[0.35em]" style={{ color: C.taupe }}>
+          Creative Studios
+        </p>
       </div>
-      <nav className="space-y-0.5 flex-1">
-        {NAV_CLIENT.map((it) => {
-          const Icon = it.icon;
-          const active = page === it.key;
+      <nav className="space-y-1 flex-1">
+        {NAV.map((item) => {
+          const active = page === item.key;
           return (
-            <button key={it.key} onClick={() => go(it.key)} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm"
-              style={{ background: active ? C.forest : "transparent", color: active ? "#fff" : C.cream }}>
-              <Icon size={16} /> {it.label}
+            <button
+              key={item.key}
+              onClick={() => setPage(item.key)}
+              className="w-full flex items-center px-3 py-2.5 rounded-xl text-sm"
+              style={{ background: active ? C.forest : "transparent", color: active ? "#fff" : C.cream }}
+            >
+              {item.label}
             </button>
           );
         })}
       </nav>
-      <div className="flex items-center gap-2 pt-4 mt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium" style={{ background: C.taupe, color: C.charcoal }}>SG</div>
-        <div className="text-xs">
-          <p className="text-white">Sarah Garcia</p>
-          <p style={{ color: C.taupe }}>Maternity Session</p>
-        </div>
+      <div className="pt-4 mt-4 text-xs" style={{ borderTop: "1px solid rgba(255,255,255,0.1)", color: C.taupe }}>
+        {clientName} • {sessionType}
       </div>
     </>
   );
 }
 
-const AVAILABLE_SLOTS = ["Sat, July 18 · 9:00 AM", "Sun, July 19 · 4:00 PM", "Mon, July 20 · 4:30 PM", "Wed, July 22 · 10:00 AM"];
-
-function ClientOverview({ stageIndex, status, goToStage, logActivity, go, portal, setPortal }) {
-  const session = getSessionInfo(portal);
-  const [picked, setPicked] = useState(session.date + " · " + session.time);
-
-  const confirmDate = () => {
-    const [rawDate, rawTime] = picked.split("·").map((part) => part.trim());
-    const dateWithoutWeekday = rawDate.replace(/^[A-Za-z]+,\s*/, "");
-
-    setPortal && setPortal((current) => ({
-      ...current,
-      useProjectDetails: false,
-      customDate: dateWithoutWeekday ? `${dateWithoutWeekday}, 2026` : current.customDate,
-      customTime: rawTime || current.customTime,
-    }));
-
-    goToStage(7);
-    logActivity && logActivity(`${SARAH.name} selected ${picked} — session booked`);
-  };
+function OverviewPage({ selectedBundle, actions }) {
+  const session = selectedBundle.session;
+  const portal = selectedBundle.portal;
+  const quote = selectedBundle.primaryQuote;
+  const contract = selectedBundle.primaryContract;
+  const invoice = selectedBundle.primaryInvoice;
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="ecc-display text-cream text-sm italic mb-1" style={{ color: C.taupe }}>Welcome back,</p>
-          <p className="ecc-display text-3xl" style={{ color: C.ink }}>{SARAH.name}</p>
-          <p className="text-sm" style={{ color: C.charcoal }}>{SARAH.sessionType}</p>
-          {status.projectCreated && (
-            <div className="text-sm mt-2 space-y-1" style={{ color: C.charcoal }}>
-              <p className="flex items-center gap-2"><CalendarIcon size={14} /> {session.date}</p>
-              <p className="flex items-center gap-2"><MapPin size={14} /> {session.location}</p>
-            </div>
-          )}
-        </div>
-        <Card className="p-4 w-full sm:w-56">
-          <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: C.taupe }}>Session Status</p>
-          <p className="ecc-display text-xl" style={{ color: C.ink }}>
-            <StatusLight tone={status.statusLight} label={status.sessionStatus} />
-          </p>
-        </Card>
+      <Card className="p-6 sm:p-8" style={{ background: `linear-gradient(135deg, ${C.charcoal}, ${C.ink})`, borderColor: "transparent" }}>
+        <p className="text-[10px] uppercase tracking-[0.35em]" style={{ color: C.taupe }}>Session Journey</p>
+        <p className="ecc-display text-4xl text-white mt-3 max-w-xl leading-tight">
+          Everything for your session, beautifully organized in one place.
+        </p>
+        <p className="text-sm mt-4 max-w-lg" style={{ color: C.cream }}>
+          Review your proposal, sign, pay, choose your date, and prepare for your session without losing the calm editorial feel.
+        </p>
+      </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <InfoCard label="Current step" value={PIPELINE_LABELS[selectedBundle.stage]} />
+        <InfoCard label="Session status" value={session?.status || "planning"} />
+        <InfoCard label="Balance remaining" value={formatCurrency(selectedBundle.invoices.reduce((sum, entry) => sum + entry.balanceDue, 0))} />
       </div>
 
-      {!status.projectCreated && stageIndex < 6 && (
-        <div className="px-4 py-3 rounded-xl text-sm" style={{ background: "#fbf1e6", color: C.ink }}>
-          Your session isn't booked yet. Sign your contract and pay your invoice to secure your date — head to Documents below.
-        </div>
-      )}
-
-      {stageIndex === 6 && (
-        <Card className="p-5" style={{ border: `1px solid ${C.taupe}` }}>
-          <p className="ecc-display text-xl mb-1" style={{ color: C.ink }}>Pick your date</p>
-          <p className="text-sm mb-4" style={{ color: C.charcoal }}>Deposit's in and your contract is signed — last step. Choose a slot to lock in your session.</p>
-          <div className="space-y-2 mb-4">
-            {AVAILABLE_SLOTS.map((slot) => (
-              <label key={slot} className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm cursor-pointer" style={{ border: `1px solid ${picked === slot ? C.forest : C.line}`, background: picked === slot ? C.cream : "#fff" }}>
-                <input type="radio" checked={picked === slot} onChange={() => setPicked(slot)} />
-                {slot}
-              </label>
+      {selectedBundle.stage === "deposit_paid" && session?.status === "awaiting_schedule" && (
+        <Card className="p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <CalendarDays size={18} color={C.forest} />
+            <p className="ecc-display text-2xl" style={{ color: C.ink }}>Pick your date</p>
+          </div>
+          <p className="text-sm mb-4" style={{ color: C.charcoal }}>
+            Your contract is signed and your deposit is in. Choose the time that works best and we’ll secure it instantly.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {SLOT_OPTIONS.map((slot) => (
+              <button
+                key={`${slot.date}-${slot.time}`}
+                onClick={() => actions.scheduleSession(selectedBundle.client.id, slot)}
+                className="p-4 rounded-2xl text-left"
+                style={{ border: `1px solid ${C.line}` }}
+              >
+                <p className="text-sm font-medium" style={{ color: C.ink }}>{slot.date}</p>
+                <p className="text-xs mt-1" style={{ color: C.charcoal }}>{slot.time}</p>
+                <p className="text-xs mt-1" style={{ color: C.taupe }}>{slot.locationName}</p>
+              </button>
             ))}
           </div>
-          <button onClick={confirmDate} className="w-full py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>
-            Confirm date & secure my session
-          </button>
         </Card>
       )}
 
-      {status.projectCreated && (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <DocumentStatusCard
+          icon={FileText}
+          title={quote?.number || "Quote"}
+          status={quote?.status || "not created"}
+          description={quote ? `${formatCurrency(quote.total)} total proposal` : "Your quote will appear here once it is prepared."}
+        />
+        <DocumentStatusCard
+          icon={FileSignature}
+          title={contract?.number || "Contract"}
+          status={contract?.status || "not created"}
+          description={contract ? contract.templateName : "Your contract becomes available after quote acceptance."}
+        />
+        <DocumentStatusCard
+          icon={CreditCard}
+          title={invoice?.number || "Invoice"}
+          status={invoice?.status || "not created"}
+          description={invoice ? `${formatCurrency(invoice.balanceDue)} balance due` : "Invoices appear once your booking paperwork is ready."}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_0.9fr] gap-4">
         <Card className="p-5">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs uppercase tracking-widest flex items-center gap-2" style={{ color: C.taupe }}><Sparkles size={14} /> Vision Board</p>
-            <button onClick={() => go("vision")} className="text-xs underline" style={{ color: C.forest }}>View Full Board</button>
+          <div className="flex items-center gap-2 mb-3">
+            <MapPin size={16} color={C.taupe} />
+            <p className="text-[10px] uppercase tracking-[0.3em]" style={{ color: C.taupe }}>Session Details</p>
           </div>
-          <VisionGrid compact images={portal.visionImages} />
-          <p className="text-sm mt-3 line-clamp-2" style={{ color: C.charcoal }}>{portal.sessionVision}</p>
-        </Card>
-      )}
-
-      {status.projectCreated && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Card className="p-4">
-            <p className="text-xs uppercase tracking-widest mb-2 flex items-center gap-2" style={{ color: C.taupe }}><CloudSun size={14} /> Weather Forecast</p>
-            <p className="ecc-display text-2xl" style={{ color: C.ink }}>77°F</p>
-            <p className="text-xs" style={{ color: C.charcoal }}>Partly Cloudy · {session.location}</p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-xs uppercase tracking-widest mb-2 flex items-center gap-2" style={{ color: C.taupe }}><MapPin size={14} /> Location</p>
-            <p className="text-sm font-medium" style={{ color: C.ink }}>{SARAH.studio}</p>
-            <p className="text-xs" style={{ color: C.charcoal }}>{session.location}</p>
-          </Card>
-        </div>
-      )}
-
-      <Card className="p-5">
-        <p className="text-xs uppercase tracking-widest mb-2" style={{ color: C.taupe }}>My Documents</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {[
-            { l: "Quote", st: status.quote, k: "quote" },
-            { l: "Contract", st: status.contract, k: "contract" },
-            { l: "Invoice", st: status.invoice, k: "invoice" },
-            { l: "Inquiry Form", st: "received", k: "inquiry" },
-          ].map((d) => (
-            <button key={d.k} onClick={() => go("documents")} className="p-3 rounded-xl text-left" style={{ border: `1px solid ${C.line}` }}>
-              <FileText size={14} color={C.taupe} />
-              <p className="text-xs mt-1.5 font-medium" style={{ color: C.ink }}>{d.l}</p>
-              <Pill tone={docTone(d.st)}>{docLabel(d.k, d.st) || d.st}</Pill>
-            </button>
-          ))}
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-const PortalLocked = ({ body }) => (
-  <Card className="p-10 text-center">
-    <Lock size={24} color={C.taupe} className="mx-auto mb-3" />
-    <p className="ecc-display text-2xl mb-2" style={{ color: C.ink }}>Available once you're booked</p>
-    <p className="text-sm max-w-sm mx-auto" style={{ color: C.charcoal }}>{body || "This unlocks the moment your quote's accepted, contract's signed, deposit's paid, and your date is picked."}</p>
-  </Card>
-);
-
-function VisionGrid({ compact, images = [] }) {
-  const tiles = compact ? 3 : 7;
-  const placeholders = Math.max(0, tiles - images.length);
-  return (
-    <div className="grid grid-cols-3 gap-2" style={{ gridAutoRows: compact ? undefined : "90px" }}>
-      {images.slice(0, tiles).map((img, i) => (
-        <div
-          key={img.id || i}
-          className={compact ? "aspect-square rounded-xl overflow-hidden" : "rounded-xl overflow-hidden"}
-          style={{ gridRow: !compact && i % 3 === 0 ? "span 2" : undefined }}
-        >
-          <img src={img.url} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.style.opacity = 0.2; }} />
-        </div>
-      ))}
-      {Array.from({ length: placeholders }).map((_, i) => (
-        <div
-          key={"ph" + i}
-          className={compact ? "aspect-square rounded-xl flex items-center justify-center" : "rounded-xl flex items-center justify-center"}
-          style={{ background: `linear-gradient(135deg, ${C.cream}, ${C.taupe})`, gridRow: !compact && (images.length + i) % 3 === 0 ? "span 2" : undefined }}
-        >
-          <ImageIcon size={20} color="#fff" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ClientDetails({ portal }) {
-  return (
-    <div className="space-y-4">
-      <p className="ecc-display text-2xl" style={{ color: C.ink }}>Session Details</p>
-      <Card className="p-5">
-        <p className="text-xs uppercase tracking-widest mb-2" style={{ color: C.taupe }}>Session Notes</p>
-        <p className="text-sm" style={{ color: C.charcoal }}>{portal.sessionNotes}</p>
-      </Card>
-      <Card className="p-5">
-        <p className="text-xs uppercase tracking-widest mb-2" style={{ color: C.taupe }}>Prop List</p>
-        <ul className="text-sm space-y-1" style={{ color: C.charcoal }}>
-          {portal.propList.filter(Boolean).map((p) => (
-            <li key={p} className="flex items-center gap-2"><Dot size={16} color={C.taupe} /> {p}</li>
-          ))}
-        </ul>
-      </Card>
-    </div>
-  );
-}
-
-function ClientVisionBoard({ portal }) {
-  const [mode, setMode] = useState("slideshow"); // 'slideshow' | 'grid'
-  const [slide, setSlide] = useState(0);
-  const images = portal.visionImages;
-  const TOTAL = Math.max(images.length, 7);
-  const activeImg = images[slide % Math.max(images.length, 1)];
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="ecc-display text-2xl" style={{ color: C.ink }}>Vision Board</p>
-        <button onClick={() => setMode(mode === "slideshow" ? "grid" : "slideshow")} className="text-xs underline" style={{ color: C.forest }}>
-          {mode === "slideshow" ? "View as grid" : "View as slideshow"}
-        </button>
-      </div>
-
-      {mode === "slideshow" ? (
-        <Card className="overflow-hidden">
-          <button
-            onClick={() => setMode("grid")}
-            className="w-full aspect-[4/5] flex items-center justify-center relative overflow-hidden"
-            style={{ background: activeImg ? "#000" : `linear-gradient(135deg, ${C.cream}, ${C.taupe}, ${C.charcoal})` }}
-          >
-            {activeImg ? <img src={activeImg.url} alt="" className="w-full h-full object-cover" /> : <ImageIcon size={40} color="#fff" />}
-            <span className="absolute bottom-3 right-3 text-xs px-2 py-1 rounded-full" style={{ background: "rgba(0,0,0,0.4)", color: "#fff" }}>{slide + 1} / {TOTAL} · tap for full board</span>
-          </button>
-          <div className="flex items-center justify-between p-3">
-            <button onClick={(e) => { e.stopPropagation(); setSlide((s) => (s - 1 + TOTAL) % TOTAL); }}><ChevronLeft size={18} color={C.charcoal} /></button>
-            <p className="text-xs" style={{ color: C.taupe }}>Swipe through inspiration, or view the full Pinterest-style board</p>
-            <button onClick={(e) => { e.stopPropagation(); setSlide((s) => (s + 1) % TOTAL); }}><ChevronRight size={18} color={C.charcoal} /></button>
+          <div className="space-y-2 text-sm" style={{ color: C.ink }}>
+            <p>Date: {session?.sessionDate || portal?.customDate || "Waiting for your selection"}</p>
+            <p>Time: {session?.sessionTime || portal?.customTime || "To be confirmed"}</p>
+            <p>Location: {portal?.customLocation || "Dallas, TX"}</p>
           </div>
         </Card>
-      ) : (
-        <VisionGrid images={images} />
-      )}
-
-      <Card className="p-5">
-        <p className="text-sm italic" style={{ color: C.charcoal }}>{portal.sessionVision}</p>
-      </Card>
-    </div>
-  );
-}
-
-function ClientDocuments({ status, goToStage }) {
-  const [open, setOpen] = useState(null);
-  return (
-    <div className="space-y-4">
-      <p className="ecc-display text-2xl" style={{ color: C.ink }}>Documents</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          { k: "quote", l: "Quote " + SARAH.quoteId, st: status.quote },
-          { k: "contract", l: "Contract " + SARAH.contractId, st: status.contract },
-          { k: "invoice", l: "Invoice " + SARAH.invoiceId, st: status.invoice },
-          { k: "inquiry", l: "Inquiry Form", st: "received" },
-        ].map((d) => (
-          <Card key={d.k} className="p-4 cursor-pointer" onClick={() => setOpen(d.k)}>
-            <FileText size={16} color={C.taupe} />
-            <p className="text-sm font-medium mt-2" style={{ color: C.ink }}>{d.l}</p>
-            <Pill tone={docTone(d.st)}>{docLabel(d.k, d.st) || d.st}</Pill>
-          </Card>
-        ))}
-      </div>
-      {open && <DocModal kind={open} onClose={() => setOpen(null)} status={status} goToStage={goToStage} />}
-    </div>
-  );
-}
-
-function ClientMessages({ messages, setMessages }) {
-  const [draft, setDraft] = useState("");
-  const send = () => {
-    if (!draft.trim()) return;
-    setMessages((m) => [...m, { from: "client", text: draft }]);
-    setDraft("");
-  };
-  return (
-    <div className="space-y-4">
-      <p className="ecc-display text-2xl" style={{ color: C.ink }}>Messages</p>
-      <Card className="p-5 flex flex-col" style={{ height: 420 }}>
-        <div className="flex-1 overflow-y-auto space-y-3 mb-3 ecc-scrollbar">
-          {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.from === "client" ? "justify-end" : "justify-start"}`}>
-              <div className="px-3 py-2 rounded-2xl text-sm max-w-[75%]" style={{ background: m.from === "client" ? C.forest : C.cream, color: m.from === "client" ? "#fff" : C.ink }}>
-                {m.text}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Type your message…" className="flex-1 px-3 py-2 rounded-full text-sm" style={{ border: `1px solid ${C.line}` }} />
-          <button onClick={send} className="px-4 rounded-full text-white flex items-center gap-1" style={{ background: C.forest }}><Send size={14} /></button>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function ClientPayments({ status, balancePaid, setBalancePaid }) {
-  const pct = status.invoice === "deposit_paid" ? (balancePaid ? 100 : 41) : 0;
-  return (
-    <div className="space-y-4">
-      <p className="ecc-display text-2xl" style={{ color: C.ink }}>Payments</p>
-      <Card className="p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="text-sm" style={{ color: C.charcoal }}>Deposit Paid</p>
-            <p className="ecc-display text-2xl" style={{ color: C.ink }}>${status.invoice === "deposit_paid" ? SARAH.deposit : 0}.00</p>
+        <Card className="p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles size={16} color={C.taupe} />
+            <p className="text-[10px] uppercase tracking-[0.3em]" style={{ color: C.taupe }}>Vision</p>
           </div>
-          <div>
-            <p className="text-sm" style={{ color: C.charcoal }}>Balance</p>
-            <p className="ecc-display text-2xl" style={{ color: C.ink }}>${balancePaid ? 0 : SARAH.total - SARAH.deposit}.00</p>
-          </div>
-        </div>
-        <div className="h-2 rounded-full mb-4" style={{ background: C.line }}>
-          <div className="h-2 rounded-full" style={{ width: `${pct}%`, background: C.forest }} />
-        </div>
-        {status.invoice === "deposit_paid" && !balancePaid && (
-          <button onClick={() => setBalancePaid(true)} className="w-full py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>Pay Balance — ${SARAH.total - SARAH.deposit}.00</button>
-        )}
-        {status.invoice !== "deposit_paid" && <Pill>Deposit invoice not yet sent</Pill>}
-        {balancePaid && <Pill tone="done">Paid in full</Pill>}
-        <p className="text-xs mt-3" style={{ color: C.taupe }}>Secure payments powered by Stripe · Zelle also accepted</p>
-      </Card>
-    </div>
-  );
-}
-
-function ClientPlan() {
-  return (
-    <div className="space-y-4">
-      <p className="ecc-display text-2xl" style={{ color: C.ink }}>Plan & Prep</p>
-      <Card className="p-5">
-        <p className="text-xs uppercase tracking-widest mb-2" style={{ color: C.taupe }}>Prep Tip</p>
-        <p className="text-sm" style={{ color: C.charcoal }}>Hydrate well and get plenty of rest the night before your session.</p>
-      </Card>
-      <Card className="p-5">
-        <p className="text-xs uppercase tracking-widest mb-3" style={{ color: C.taupe }}>What's Next</p>
-        <div className="space-y-3 text-sm">
-          {[
-            { l: "Session Booked", d: "June 18, 2026", done: true },
-            { l: "Planning & Inspiration", d: "In Progress", done: false },
-            { l: "Session Day", d: "July 20, 2026", done: false },
-            { l: "Gallery Delivery", d: "2–3 weeks after session", done: false },
-          ].map((s) => (
-            <div key={s.l} className="flex items-center gap-2">
-              {s.done ? <CheckCircle2 size={16} color={C.forest} /> : <Circle size={16} color={C.taupe} />}
-              <div><p style={{ color: C.ink }}>{s.l}</p><p className="text-xs" style={{ color: C.taupe }}>{s.d}</p></div>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function ClientGallery({ status }) {
-  if (status.gallery !== "delivered") {
-    return (
-      <div className="space-y-4">
-        <p className="ecc-display text-2xl" style={{ color: C.ink }}>Gallery</p>
-        <Card className="p-10 text-center">
-          <Lock size={28} color={C.taupe} className="mx-auto mb-3" />
-          <p className="text-sm" style={{ color: C.charcoal }}>Your gallery will be available here 2–3 weeks after your session.</p>
+          <p className="text-sm leading-7" style={{ color: C.ink }}>{portal?.sessionVision || "Your visual plan will appear here once your session is confirmed."}</p>
         </Card>
       </div>
-    );
+    </div>
+  );
+}
+
+function DocumentsPage({ selectedBundle, actions }) {
+  const quote = selectedBundle.primaryQuote;
+  const contract = selectedBundle.primaryContract;
+  const invoice = selectedBundle.primaryInvoice;
+
+  return (
+    <div className="space-y-4">
+      <ActionDocument
+        title={quote?.number || "Quote"}
+        body={quote ? `${formatCurrency(quote.total)} • ${selectedBundle.client.sessionType}` : "No quote has been prepared yet."}
+        status={quote?.status || "pending"}
+        actions={[
+          quote && quote.status !== "accepted" ? { label: "Accept quote", onClick: () => actions.acceptQuote(quote.id) } : null,
+          quote && quote.status === "draft" ? { label: "Mark viewed", onClick: () => actions.viewQuote(quote.id) } : null,
+        ]}
+      />
+      <ActionDocument
+        title={contract?.number || "Contract"}
+        body={contract ? `${contract.templateName} for ${selectedBundle.client.name}` : "Your contract will appear here after your quote is accepted."}
+        status={contract?.status || "pending"}
+        actions={[contract && contract.status !== "signed" ? { label: "Sign contract", onClick: () => actions.signContract(contract.id) } : null]}
+      />
+      <ActionDocument
+        title={invoice?.number || "Invoice"}
+        body={invoice ? `${formatCurrency(invoice.total)} total • ${formatCurrency(invoice.balanceDue)} remaining` : "Your invoice will appear here once your booking is ready for payment."}
+        status={invoice?.status || "pending"}
+        actions={[invoice && invoice.balanceDue > 0 ? { label: `Pay ${formatCurrency(invoice.balanceDue)}`, onClick: () => actions.recordPayment(invoice.id, invoice.balanceDue, "Portal") } : null]}
+      />
+    </div>
+  );
+}
+
+function DetailsPage({ selectedBundle }) {
+  const unlocked = selectedBundle.stage === "session_scheduled" || selectedBundle.stage === "completed" || selectedBundle.stage === "deposit_paid";
+  if (!unlocked) {
+    return <LockedCard body="Session details unlock after your quote, contract, and invoice steps are in place." />;
+  }
+  const session = selectedBundle.session;
+  const portal = selectedBundle.portal;
+  return (
+    <Card className="p-5">
+      <p className="ecc-display text-3xl mb-4" style={{ color: C.ink }}>Session Details</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <InfoCard label="Date" value={session?.sessionDate || portal?.customDate || "Awaiting selection"} />
+        <InfoCard label="Time" value={session?.sessionTime || portal?.customTime || "Awaiting selection"} />
+        <InfoCard label="Location" value={portal?.customLocation || "Dallas, TX"} />
+      </div>
+      <div className="mt-5 rounded-2xl p-4" style={{ background: C.bg }}>
+        <p className="text-sm leading-7" style={{ color: C.ink }}>{portal?.sessionNotes}</p>
+      </div>
+    </Card>
+  );
+}
+
+function VisionPage({ selectedBundle }) {
+  if (!(selectedBundle.portal?.sessionVision || selectedBundle.portal?.propList?.length)) {
+    return <LockedCard body="The styling board will appear here once planning is underway." />;
   }
   return (
-    <div className="space-y-4">
-      <p className="ecc-display text-2xl" style={{ color: C.ink }}>Your Gallery</p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {Array.from({ length: 9 }).map((_, i) => (
-          <div key={i} className="aspect-square rounded-xl flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${C.taupe}, ${C.charcoal})` }}>
-            <ImageIcon size={18} color="#fff" />
+    <Card className="p-5">
+      <p className="ecc-display text-3xl mb-4" style={{ color: C.ink }}>Vision Board</p>
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_0.9fr] gap-4">
+        <div className="rounded-2xl p-5" style={{ background: C.bg }}>
+          <p className="text-sm leading-7" style={{ color: C.ink }}>{selectedBundle.portal.sessionVision}</p>
+        </div>
+        <div className="space-y-2">
+          {(selectedBundle.portal.propList || []).map((prop, index) => (
+            <div key={`${prop}-${index}`} className="rounded-2xl p-3 flex items-center gap-3" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+              <ImageIcon size={16} color={C.taupe} />
+              <span className="text-sm" style={{ color: C.ink }}>{prop}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function MessagesPage({ selectedBundle, actions }) {
+  const [draft, setDraft] = useState("");
+
+  return (
+    <Card className="p-5">
+      <p className="ecc-display text-3xl mb-4" style={{ color: C.ink }}>Messages</p>
+      <div className="space-y-3 mb-4">
+        {selectedBundle.messages.map((message) => (
+          <div
+            key={message.id}
+            className="max-w-[80%] rounded-2xl px-4 py-3"
+            style={{
+              marginLeft: message.from === "client" ? "auto" : 0,
+              background: message.from === "client" ? C.forest : C.bg,
+              color: message.from === "client" ? "#fff" : C.ink,
+            }}
+          >
+            <p className="text-sm">{message.text}</p>
+            <p className="text-[11px] mt-2" style={{ color: message.from === "client" ? "rgba(255,255,255,0.7)" : C.taupe }}>
+              {message.createdAt}
+            </p>
           </div>
         ))}
       </div>
-      <button className="w-full py-2.5 rounded-xl text-sm font-medium text-white flex items-center justify-center gap-2" style={{ background: C.forest }}>
-        <Download size={14} /> Download Full Gallery
-      </button>
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-1 rounded-full px-4 py-2" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+          <MessageCircle size={16} color={C.taupe} />
+          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message..." className="w-full bg-transparent outline-none text-sm" />
+        </div>
+        <button onClick={() => { actions.sendMessage(selectedBundle.client.id, draft, "client"); setDraft(""); }} className="w-11 h-11 rounded-full flex items-center justify-center text-white" style={{ background: C.forest }}>
+          <Send size={16} />
+        </button>
+      </div>
+    </Card>
+  );
+}
+
+function PaymentsPage({ selectedBundle, actions }) {
+  return (
+    <div className="space-y-4">
+      {selectedBundle.invoices.length === 0 && <LockedCard body="Payments will appear here once your booking invoice is ready." />}
+      {selectedBundle.invoices.map((invoice) => (
+        <Card key={invoice.id} className="p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="ecc-display text-3xl" style={{ color: C.ink }}>{invoice.number}</p>
+              <p className="text-sm mt-1" style={{ color: C.charcoal }}>{invoice.kind} invoice</p>
+            </div>
+            <Pill tone={invoice.status === "paid" ? "done" : invoice.status === "sent" || invoice.status === "partially_paid" ? "info" : "neutral"}>
+              {invoice.status}
+            </Pill>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+            <InfoCard label="Total" value={formatCurrency(invoice.total)} />
+            <InfoCard label="Paid" value={formatCurrency(invoice.amountPaid)} />
+            <InfoCard label="Balance due" value={formatCurrency(invoice.balanceDue)} />
+          </div>
+          {invoice.balanceDue > 0 && (
+            <button onClick={() => actions.recordPayment(invoice.id, invoice.balanceDue, "Portal")} className="mt-4 px-4 py-3 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>
+              Pay remaining balance
+            </button>
+          )}
+        </Card>
+      ))}
     </div>
+  );
+}
+
+function InfoCard({ label, value }) {
+  return (
+    <div className="rounded-2xl p-4" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+      <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>{label}</p>
+      <p className="text-sm mt-2 font-medium" style={{ color: C.ink }}>{value}</p>
+    </div>
+  );
+}
+
+function DocumentStatusCard({ icon: Icon, title, status, description }) {
+  return (
+    <Card className="p-5">
+      <Icon size={18} color={C.taupe} />
+      <p className="text-sm font-medium mt-3" style={{ color: C.ink }}>{title}</p>
+      <p className="text-xs mt-1" style={{ color: C.charcoal }}>{description}</p>
+      <div className="mt-3">
+        <Pill tone={status === "accepted" || status === "signed" || status === "paid" ? "done" : status === "sent" || status === "viewed" || status === "partially_paid" ? "info" : "neutral"}>
+          {status}
+        </Pill>
+      </div>
+    </Card>
+  );
+}
+
+function ActionDocument({ title, body, status, actions = [] }) {
+  return (
+    <Card className="p-5">
+      <p className="ecc-display text-3xl" style={{ color: C.ink }}>{title}</p>
+      <p className="text-sm mt-2" style={{ color: C.charcoal }}>{body}</p>
+      <div className="mt-3">
+        <Pill tone={status === "accepted" || status === "signed" || status === "paid" ? "done" : status === "sent" || status === "viewed" || status === "partially_paid" ? "info" : "neutral"}>
+          {status}
+        </Pill>
+      </div>
+      <div className="flex flex-wrap gap-2 mt-4">
+        {actions.filter(Boolean).map((action) => (
+          <button key={action.label} onClick={action.onClick} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: C.cream, color: C.ink }}>
+            {action.label}
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function LockedCard({ body }) {
+  return (
+    <Card className="p-10 text-center">
+      <Lock size={24} color={C.taupe} className="mx-auto mb-3" />
+      <p className="ecc-display text-2xl mb-2" style={{ color: C.ink }}>Available soon</p>
+      <p className="text-sm max-w-md mx-auto" style={{ color: C.charcoal }}>{body}</p>
+    </Card>
   );
 }

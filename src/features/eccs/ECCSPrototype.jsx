@@ -1,86 +1,82 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useReducer, useState } from "react";
 import { C } from "./lib/brand";
-import { STAGES, deriveDocStatus } from "./lib/pipeline";
-import { makeInitialPortal } from "./lib/mock-data";
+import { createInitialState, crmReducer, getClientBundle, PIPELINE_LABELS } from "./lib/crm";
 import { FontLoad } from "./components/ui";
 import TopSwitcher from "./components/TopSwitcher";
-import ManualOverride from "./components/ManualOverride";
 import AdminApp from "./admin/AdminApp";
 import ClientApp from "./client/ClientApp";
 
+const STORAGE_KEY = "eccs-crm-v2";
+
+function initState() {
+  if (typeof window === "undefined") return createInitialState();
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : createInitialState();
+  } catch {
+    return createInitialState();
+  }
+}
+
 export default function ECCSPrototype() {
   const [app, setApp] = useState("admin");
-  const [stageIndex, setStageIndex] = useState(7);
-  const [balancePaid, setBalancePaid] = useState(false);
-  const [overrideOpen, setOverrideOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { from: "studio", text: "Hi Sarah! Excited for your session. Let us know if you have any questions." },
-    { from: "client", text: "Thank you! Should I bring my own outfit or do you provide one?" },
-    { from: "studio", text: "We have a few flowing dresses available, but feel free to bring something you love too." },
-  ]);
-  const [activity, setActivity] = useState([
-    { text: "Invoice INV-1001 was viewed", who: "client", time: "2m ago" },
-    { text: "Payment received from Sarah Garcia", who: "system", time: "15m ago" },
-    { text: "Contract signed by Sarah Garcia", who: "client", time: "1h ago" },
-    { text: "New inquiry from Daniel Andersson", who: "system", time: "2h ago" },
-    { text: "Quote QUO-1023 was accepted", who: "client", time: "3h ago" },
-  ]);
-  const [portal, setPortal] = useState(makeInitialPortal);
+  const [state, dispatch] = useReducer(crmReducer, undefined, initState);
 
-  const logActivity = (text) => setActivity((a) => [{ text, who: "manual", time: "Just now" }, ...a]);
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }, [state]);
 
-  const goToStage = (i) => {
-    setStageIndex(i);
-    logActivity(`Pipeline moved to "${STAGES[i].label}" for Sarah Garcia`);
-  };
+  const selectedBundle = useMemo(
+    () => getClientBundle(state, state.selectedClientId),
+    [state],
+  );
 
-  const status = deriveDocStatus(stageIndex);
+  const actions = useMemo(
+    () => ({
+      selectClient: (clientId) => dispatch({ type: "select_client", clientId }),
+      approveInquiry: (inquiryId) => dispatch({ type: "approve_inquiry", inquiryId }),
+      createQuote: (clientId) => dispatch({ type: "create_quote", clientId }),
+      patchQuote: (quoteId, patch) => dispatch({ type: "patch_quote", quoteId, patch }),
+      addQuoteItem: (quoteId) => dispatch({ type: "add_quote_item", quoteId }),
+      patchQuoteItem: (quoteId, itemId, patch) => dispatch({ type: "patch_quote_item", quoteId, itemId, patch }),
+      removeQuoteItem: (quoteId, itemId) => dispatch({ type: "remove_quote_item", quoteId, itemId }),
+      sendQuote: (quoteId) => dispatch({ type: "send_quote", quoteId }),
+      viewQuote: (quoteId) => dispatch({ type: "view_quote", quoteId }),
+      acceptQuote: (quoteId) => dispatch({ type: "accept_quote", quoteId }),
+      declineQuote: (quoteId) => dispatch({ type: "decline_quote", quoteId }),
+      createContract: (clientId) => dispatch({ type: "create_contract", clientId }),
+      sendContract: (contractId) => dispatch({ type: "send_contract", contractId }),
+      signContract: (contractId) => dispatch({ type: "sign_contract", contractId }),
+      createInvoice: (clientId, kind) => dispatch({ type: "create_invoice", clientId, kind }),
+      patchInvoice: (invoiceId, patch) => dispatch({ type: "patch_invoice", invoiceId, patch }),
+      sendInvoice: (invoiceId) => dispatch({ type: "send_invoice", invoiceId }),
+      recordPayment: (invoiceId, amount, method, note) =>
+        dispatch({ type: "record_payment", invoiceId, amount, method, note }),
+      scheduleSession: (clientId, payload) => dispatch({ type: "schedule_session", clientId, ...payload }),
+      completeSession: (sessionId) => dispatch({ type: "complete_session", sessionId }),
+      updatePortal: (clientId, patch) => dispatch({ type: "update_portal", clientId, patch }),
+      sendMessage: (clientId, text, from = "studio") => dispatch({ type: "send_message", clientId, text, from }),
+      resetDemo: () => window.localStorage.removeItem(STORAGE_KEY),
+    }),
+    [],
+  );
 
   return (
     <div className="ecc-body min-h-screen" style={{ background: C.bg }}>
       <FontLoad />
-      <TopSwitcher app={app} setApp={setApp} stageLabel={STAGES[stageIndex].label} />
+      <TopSwitcher
+        app={app}
+        setApp={setApp}
+        stageLabel={selectedBundle.client ? PIPELINE_LABELS[selectedBundle.stage] : "No client selected"}
+      />
 
       {app === "admin" ? (
-        <AdminApp
-          stageIndex={stageIndex}
-          goToStage={goToStage}
-          status={status}
-          activity={activity}
-          logActivity={logActivity}
-          balancePaid={balancePaid}
-          setBalancePaid={setBalancePaid}
-          messages={messages}
-          setMessages={setMessages}
-          setApp={setApp}
-          portal={portal}
-          setPortal={setPortal}
-        />
+        <AdminApp state={state} selectedBundle={selectedBundle} actions={actions} setApp={setApp} />
       ) : (
-        <ClientApp
-          stageIndex={stageIndex}
-          status={status}
-          balancePaid={balancePaid}
-          setBalancePaid={setBalancePaid}
-          goToStage={goToStage}
-          logActivity={logActivity}
-          messages={messages}
-          setMessages={setMessages}
-          portal={portal}
-          setPortal={setPortal}
-        />
+        <ClientApp state={state} selectedBundle={selectedBundle} actions={actions} setApp={setApp} />
       )}
-
-      <ManualOverride
-        open={overrideOpen}
-        setOpen={setOverrideOpen}
-        stageIndex={stageIndex}
-        goToStage={goToStage}
-        balancePaid={balancePaid}
-        setBalancePaid={setBalancePaid}
-      />
     </div>
   );
 }
