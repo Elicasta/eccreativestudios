@@ -1,44 +1,34 @@
 # EC Creative Studios Client Experience OS
 
-This is the first refactor pass of the original one-file JSX prototype into a Next.js app structure.
+A Next.js admin CRM + client portal prototype, running on a local in-memory reducer (no Supabase yet). State persists to `localStorage` so a refresh doesn't wipe your demo data.
 
-## What stayed intact
+## What's actually in this build
 
-All current prototype areas are still present:
+This list is checked against the running code, not aspirational. If it's not wired to a real action below, it's marked as such.
 
-- Admin / CRM shell
-- Dashboard
-- Notifications
-- Inquiries
-- Clients
-- Projects
-- Portal Editor
-- Sessions
-- Calendar
-- Quotes
-- Contracts
-- Invoices
-- Payments
-- Email logs
-- Email marketing
-- Social messaging
-- Contact forms
-- Workflows
-- Templates
-- Client portal
-- Client overview
-- Session details
-- Vision board
-- Documents
-- Messages
-- Payments
-- Plan & prep
-- Gallery
-- Manual stage override
+**Admin / CRM**
+- Dashboard, Pipeline (kanban by stage), Inquiries, Clients, Projects (folder-per-client, gated booking workspace)
+- Quotes, Contracts, Invoices, Payments — all backed by real reducer actions, not status text
+- Sessions, Calendar (month grid + agenda, pulled from real session dates)
+- Portal Editor — session vision/notes/prop list, date/time/location override, **vision board images (paste URL or upload from device) and gallery images**, gated until the client is actually booked
+- Emails (milestone triggers: portal access, date selection, calendar invite, not-booked reminder) + Activity log
+- Email Marketing (segments computed from real client tags), Social Messaging (IG DM keyword rules — mock, not connected), Contact Forms (field builder), Templates (Contracts/Invoices/Quotes/Questionnaires/Emails, with merge-field insertion)
+- Settings / Branding / Team / Workflows — intentionally thin placeholders, not real features
+- Manual Override (floating button, bottom right) — fast-forwards the selected client to any pipeline stage by creating the real quote/contract/invoice/session records needed to get there, not by faking a status. Also handles Lost and Archived.
+- Mobile: drawer + bottom tab nav
 
-## What changed in this pass
+**Client Portal**
+- Overview, Documents (with inline accept/sign/pay actions), Session Details, Vision Board (slideshow-first, tap for Pinterest-style grid, renders real images from the Portal Editor), Plan & Prep, Messages, Payments, Gallery (locked until the studio delivers it)
+- Mobile: drawer + bottom tab nav
 
-The old single JSX file was split into focused modules:
+## What's still not real
+
+- No Supabase, no auth, no Stripe, no actual email sending
+- Email Marketing / Social Messaging / Contact Forms have no backend — they're the shape of the feature, not the wiring (each page says so where it matters)
+- One session per client in the data model — `state.sessions` is keyed by `clientId` but the selector takes the first match. Repeat clients with multiple sessions need a real schema change, not just a UI change.
+- Manual Override moves a client forward only. It won't unsign a contract or unpay an invoice — edit those records directly if you need to back up.
+
+## Structure
 
 ```txt
 app/
@@ -46,28 +36,20 @@ app/
   page.jsx
 
 src/features/eccs/
-  ECCSPrototype.jsx
-  admin/AdminApp.jsx
-  client/ClientApp.jsx
+  ECCSPrototype.jsx        — root state (useReducer + localStorage), renders TopSwitcher + ManualOverride + the active app
+  admin/AdminApp.jsx       — every admin page
+  client/ClientApp.jsx     — every client portal page
   components/
-    DocModal.jsx
-    ManualOverride.jsx
+    ManualOverride.jsx     — dispatches real actions against the selected client, not a fake stage index
     TopSwitcher.jsx
-    ui.jsx
+    ui.jsx                 — Pill, Card, Avatar, StatusLight, EmptyState, etc.
   lib/
-    brand.js
-    mock-data.js
-    pipeline.js
+    brand.js               — color tokens
+    crm.js                 — state shape, getClientBundle selector, full reducer, derivePipelineStage
 
 legacy/
-  eccs-prototype.original.jsx
+  eccs-prototype.original.jsx   — the original single-file artifact this was split from
 ```
-
-## Small behavior fix included
-
-When a client chooses a date slot from the portal, the selected date/time is now saved into portal state before the pipeline moves to `Booked`.
-
-Previously, the button moved the project to booked but kept showing the old project date.
 
 ## Run locally
 
@@ -76,17 +58,13 @@ npm install
 npm run dev
 ```
 
-Then open:
+Then open `http://localhost:3000`.
 
-```txt
-http://localhost:3000
-```
+`npm run build` has been verified to compile and statically prerender cleanly.
 
 ## Next lake to boil
 
-Recommended next step:
-
-1. Move the shared stage transitions into a guarded action layer.
-2. Add a `TBD` booking state for clients who are approved but not date-ready.
-3. Split AdminApp into route-level feature modules.
-4. Map the current mock data to Supabase tables.
+1. Multi-session-per-client (real "projects" entity, not session-as-project)
+2. Map the mock data to Supabase tables
+3. Wire Stripe into the invoice/payment actions
+4. Real Resend integration for Email Marketing and the milestone Emails page

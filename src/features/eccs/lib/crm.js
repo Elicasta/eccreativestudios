@@ -83,8 +83,27 @@ export const PIPELINE_STAGES = [
   { key: "deposit_paid", label: "Deposit Paid" },
   { key: "session_scheduled", label: "Session Scheduled" },
   { key: "completed", label: "Completed" },
+  { key: "gallery_delivered", label: "Gallery Delivered" },
   { key: "archived", label: "Archived" },
   { key: "lost", label: "Lost / Cancelled" },
+];
+
+// Stages a Manual Override can actually fast-forward a client to. "new_inquiry"
+// isn't reachable here because a client record only exists once an inquiry has
+// already been approved. "archived" and "lost" are terminal flags, handled as
+// their own dispatches instead of the forward sequencer.
+export const FORCE_STAGE_ORDER = [
+  "needs_review",
+  "quote_drafted",
+  "quote_sent",
+  "quote_accepted",
+  "contract_sent",
+  "contract_signed",
+  "invoice_sent",
+  "deposit_paid",
+  "session_scheduled",
+  "completed",
+  "gallery_delivered",
 ];
 
 export const PIPELINE_LABELS = Object.fromEntries(PIPELINE_STAGES.map((stage) => [stage.key, stage.label]));
@@ -440,6 +459,7 @@ export function createInitialState() {
           "Bring neutral undergarments, hydrate well, and arrive 15 minutes early so we can settle in before photographing.",
         propList: ["Flowing cream dress", "Draped gauze", "Wood stool", "Floral stem bundle"],
         visionImages: [],
+        galleryImages: [],
       },
       {
         clientId: clientAshleyId,
@@ -451,6 +471,7 @@ export function createInitialState() {
         sessionNotes: "Draft portal only. Unlock once booking is complete.",
         propList: ["Cream swaddle", "Bassinet", "Rattan stool"],
         visionImages: [],
+        galleryImages: [],
       },
       {
         clientId: clientThomasId,
@@ -462,6 +483,7 @@ export function createInitialState() {
         sessionNotes: "Portal staged but hidden until signature + invoice are ready.",
         propList: ["Getting-ready flat lay kit", "Champagne coupe"],
         visionImages: [],
+        galleryImages: [],
       },
     ],
     messages: [
@@ -544,7 +566,7 @@ export function getClientBundle(state, clientId) {
   const notes = state.notes.filter((entry) => entry.clientId === clientId);
   const activity = state.activity.filter((entry) => entry.clientId === clientId);
   const emailLogs = (state.emailLogs || []).filter((entry) => entry.clientId === clientId);
-  const stage = derivePipelineStage({ inquiry, quotes, contracts, invoices, session });
+  const stage = derivePipelineStage({ client, inquiry, quotes, contracts, invoices, session });
   const booking = deriveBookingState({ inquiry, quotes, contracts, invoices, session });
   const projectStatus = deriveProjectStatus(session, booking, emailLogs);
 
@@ -617,13 +639,15 @@ function deriveProjectStatus(session, booking, emailLogs) {
 }
 
 export function derivePipelineStage(bundle) {
-  const { inquiry, quotes = [], contracts = [], invoices = [], session } = bundle;
+  const { client, inquiry, quotes = [], contracts = [], invoices = [], session } = bundle;
   const booking = deriveBookingState(bundle);
   const quote = quotes[0];
   const contract = contracts[0];
   const sentInvoice = invoices.find((entry) => ["sent", "partially_paid", "paid"].includes(entry.status));
 
   if (inquiry?.status === "lost") return "lost";
+  if (client?.status === "archived") return "archived";
+  if (session?.galleryStatus === "delivered") return "gallery_delivered";
   if (session?.status === "completed") return "completed";
   if (session?.status === "scheduled" && session.sessionDate) return "session_scheduled";
   if (booking.isBooked) return "deposit_paid";
@@ -711,6 +735,7 @@ export function crmReducer(state, action) {
             sessionNotes: "",
             propList: [],
             visionImages: [],
+            galleryImages: [],
           },
           ...state.portalProfiles,
         ];
@@ -1249,6 +1274,231 @@ export function crmReducer(state, action) {
         },
         client.name,
         `${action.from === "client" ? "Client" : "Studio"} message added.`,
+      );
+    }
+
+    case "force_stage": {
+      const { clientId, stageKey } = action;
+      const targetRank = FORCE_STAGE_ORDER.indexOf(stageKey);
+      if (targetRank === -1) return state;
+
+      let working = state;
+      let bundle = getClientBundle(working, clientId);
+      if (!bundle.client) return state;
+      const clientName = bundle.client.name;
+      const pkg = working.packages.find((entry) => entry.id === bundle.client.packageId) || working.packages[0];
+
+      if (targetRank >= FORCE_STAGE_ORDER.indexOf("quote_drafted")) {
+        bundle = getClientBundle(working, clientId);
+        let quote = bundle.quotes.find((entry) => activeQuoteStatuses.includes(entry.status)) || bundle.quotes[0];
+        if (!quote) {
+          quote = recalcQuote({
+            id: nextId("quote"),
+            number: `QUO-${1000 + working.quotes.length + 1}`,
+            clientId,
+            inquiryId: bundle.client.inquiryId,
+            eventType: bundle.client.sessionType,
+            sessionDate: bundle.inquiry?.desiredDate || "",
+            location: bundle.client.city || "",
+            status: "draft",
+            lineItems: buildQuoteItems(pkg),
+            discount: 0,
+            tax: 0,
+            notes: "Drafted via Manual Override.",
+            expirationDate: "",
+            createdAt: dayStamp(),
+            sentAt: "",
+            viewedAt: "",
+            acceptedAt: "",
+          });
+          working = {
+            ...working,
+            quotes: [quote, ...working.quotes],
+            sessions: working.sessions.map((entry) => (entry.clientId === clientId ? { ...entry, quoteId: quote.id } : entry)),
+          };
+        }
+        if (targetRank >= FORCE_STAGE_ORDER.indexOf("quote_sent") && quote.status === "draft") {
+          quote = { ...quote, status: "sent", sentAt: quote.sentAt || dayStamp() };
+          working = { ...working, quotes: working.quotes.map((entry) => (entry.id === quote.id ? quote : entry)) };
+        }
+        if (targetRank >= FORCE_STAGE_ORDER.indexOf("quote_accepted") && quote.status !== "accepted") {
+          quote = { ...quote, status: "accepted", acceptedAt: dayStamp() };
+          working = { ...working, quotes: working.quotes.map((entry) => (entry.id === quote.id ? quote : entry)) };
+        }
+      }
+
+      if (targetRank >= FORCE_STAGE_ORDER.indexOf("contract_sent")) {
+        bundle = getClientBundle(working, clientId);
+        const acceptedQuote = bundle.quotes.find((entry) => entry.status === "accepted");
+        let contract = bundle.contracts.find((entry) => activeContractStatuses.includes(entry.status)) || bundle.contracts[0];
+        if (!contract && acceptedQuote) {
+          contract = {
+            id: nextId("contract"),
+            number: `CON-${1000 + working.contracts.length + 1}`,
+            clientId,
+            quoteId: acceptedQuote.id,
+            templateName: "Portrait Session Agreement",
+            status: "draft",
+            createdAt: dayStamp(),
+            sentAt: "",
+            signedAt: "",
+            signerName: "",
+          };
+          working = {
+            ...working,
+            contracts: [contract, ...working.contracts],
+            sessions: working.sessions.map((entry) => (entry.clientId === clientId ? { ...entry, contractId: contract.id } : entry)),
+          };
+        }
+        if (contract && contract.status === "draft") {
+          contract = { ...contract, status: "sent", sentAt: contract.sentAt || dayStamp() };
+          working = { ...working, contracts: working.contracts.map((entry) => (entry.id === contract.id ? contract : entry)) };
+        }
+        if (contract && targetRank >= FORCE_STAGE_ORDER.indexOf("contract_signed") && contract.status !== "signed") {
+          contract = { ...contract, status: "signed", signedAt: dayStamp(), signerName: clientName };
+          working = { ...working, contracts: working.contracts.map((entry) => (entry.id === contract.id ? contract : entry)) };
+          working = maybeCreateProjectForClient(working, clientId);
+        }
+      }
+
+      if (targetRank >= FORCE_STAGE_ORDER.indexOf("invoice_sent")) {
+        bundle = getClientBundle(working, clientId);
+        const acceptedQuote = bundle.quotes.find((entry) => entry.status === "accepted");
+        const signedContract = bundle.contracts.find((entry) => entry.status === "signed");
+        let invoice = bundle.invoices.find((entry) => entry.kind === "deposit") || bundle.invoices[0];
+        if (!invoice && acceptedQuote) {
+          const depositAmount = money(Math.round(acceptedQuote.total * 0.4));
+          invoice = recalcInvoice({
+            id: nextId("invoice"),
+            number: `INV-${1000 + working.invoices.length + 1}`,
+            kind: "deposit",
+            clientId,
+            quoteId: acceptedQuote.id,
+            contractId: signedContract?.id || null,
+            sessionId: bundle.session?.id || null,
+            status: "draft",
+            lineItems: buildInvoiceItems("Deposit to secure session", depositAmount),
+            tax: 0,
+            amountPaid: 0,
+            dueDate: "",
+            createdAt: dayStamp(),
+            sentAt: "",
+            paidAt: "",
+            paymentMethod: "",
+            internalNotes: "Created via Manual Override.",
+          });
+          working = {
+            ...working,
+            invoices: [invoice, ...working.invoices],
+            sessions: working.sessions.map((entry) =>
+              entry.clientId === clientId
+                ? { ...entry, invoiceIds: Array.from(new Set([...(entry.invoiceIds || []), invoice.id])) }
+                : entry,
+            ),
+          };
+        }
+        if (invoice && invoice.status === "draft") {
+          invoice = { ...invoice, status: "sent", sentAt: invoice.sentAt || dayStamp() };
+          working = { ...working, invoices: working.invoices.map((entry) => (entry.id === invoice.id ? invoice : entry)) };
+        }
+        if (invoice && targetRank >= FORCE_STAGE_ORDER.indexOf("deposit_paid") && invoice.balanceDue > 0) {
+          const amount = invoice.balanceDue;
+          const updated = recalcInvoice({ ...invoice, amountPaid: invoice.total, paidAt: dayStamp(), paymentMethod: invoice.paymentMethod || "Manual override" });
+          const finalInvoice = { ...updated, status: "paid" };
+          working = {
+            ...working,
+            invoices: working.invoices.map((entry) => (entry.id === invoice.id ? finalInvoice : entry)),
+            payments: [
+              { id: nextId("payment"), clientId, invoiceId: invoice.id, amount, method: "Manual override", paidAt: dayStamp(), note: "Recorded via Manual Override" },
+              ...working.payments,
+            ],
+            sessions: working.sessions.map((entry) =>
+              entry.clientId === clientId ? { ...entry, status: "awaiting_schedule", prepStatus: "awaiting_client_date" } : entry,
+            ),
+          };
+          working = maybeCreateProjectForClient(working, clientId);
+        }
+      }
+
+      if (targetRank >= FORCE_STAGE_ORDER.indexOf("session_scheduled")) {
+        bundle = getClientBundle(working, clientId);
+        const session = bundle.session;
+        if (session && !session.sessionDate) {
+          const slot = { date: "Jul 20, 2026", time: "4:30 PM", locationName: "The Light Haus Studio" };
+          working = {
+            ...working,
+            sessions: working.sessions.map((entry) =>
+              entry.id === session.id
+                ? { ...entry, status: "scheduled", sessionDate: slot.date, sessionTime: slot.time, prepStatus: "scheduled", projectCreatedAt: entry.projectCreatedAt || dayStamp() }
+                : entry,
+            ),
+            portalProfiles: working.portalProfiles.map((entry) =>
+              entry.clientId === clientId
+                ? { ...entry, useProjectDetails: false, customDate: slot.date, customTime: slot.time, customLocation: slot.locationName }
+                : entry,
+            ),
+          };
+        }
+      }
+
+      if (targetRank >= FORCE_STAGE_ORDER.indexOf("completed")) {
+        bundle = getClientBundle(working, clientId);
+        const session = bundle.session;
+        if (session && session.status !== "completed") {
+          working = {
+            ...working,
+            sessions: working.sessions.map((entry) => (entry.id === session.id ? { ...entry, status: "completed", galleryStatus: "ready_for_delivery" } : entry)),
+          };
+        }
+      }
+
+      if (targetRank >= FORCE_STAGE_ORDER.indexOf("gallery_delivered")) {
+        bundle = getClientBundle(working, clientId);
+        const session = bundle.session;
+        if (session && session.galleryStatus !== "delivered") {
+          working = {
+            ...working,
+            sessions: working.sessions.map((entry) => (entry.id === session.id ? { ...entry, galleryStatus: "delivered", galleryDeliveredAt: dayStamp() } : entry)),
+          };
+        }
+      }
+
+      const targetLabel = PIPELINE_LABELS[stageKey] || stageKey;
+      return withActivity(working, clientName, `Manual Override: fast-forwarded to "${targetLabel}".`);
+    }
+
+    case "mark_lost": {
+      const bundle = getClientBundle(state, action.clientId);
+      if (!bundle.client) return state;
+      return withActivity(
+        { ...state, inquiries: state.inquiries.map((entry) => (entry.id === bundle.client.inquiryId ? { ...entry, status: "lost" } : entry)) },
+        bundle.client.name,
+        "Marked as lost via Manual Override.",
+      );
+    }
+
+    case "mark_archived": {
+      const client = state.clients.find((entry) => entry.id === action.clientId);
+      if (!client) return state;
+      return withActivity(
+        { ...state, clients: state.clients.map((entry) => (entry.id === action.clientId ? { ...entry, status: "archived" } : entry)) },
+        client.name,
+        "Client archived via Manual Override.",
+      );
+    }
+
+    case "deliver_gallery": {
+      const bundle = getClientBundle(state, action.clientId);
+      if (!bundle.session) return state;
+      return withActivity(
+        {
+          ...state,
+          sessions: state.sessions.map((entry) =>
+            entry.id === bundle.session.id ? { ...entry, galleryStatus: "delivered", galleryDeliveredAt: dayStamp() } : entry,
+          ),
+        },
+        bundle.client?.name || "Client",
+        "Gallery marked delivered.",
       );
     }
 

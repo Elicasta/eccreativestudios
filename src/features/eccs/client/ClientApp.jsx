@@ -1,11 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   CalendarDays,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Circle,
   CreditCard,
   FileSignature,
   FileText,
+  Home,
   Image as ImageIcon,
   Lock,
   MapPin,
@@ -19,12 +24,21 @@ import { formatCurrency, PIPELINE_LABELS } from "../lib/crm";
 import { Card, Pill, StatusLight } from "../components/ui";
 
 const NAV = [
-  { key: "overview", label: "Overview" },
-  { key: "documents", label: "Documents" },
-  { key: "details", label: "Session Details" },
-  { key: "vision", label: "Vision Board" },
-  { key: "messages", label: "Messages" },
-  { key: "payments", label: "Payments" },
+  { key: "overview", label: "Overview", icon: Home },
+  { key: "documents", label: "Documents", icon: FileText },
+  { key: "details", label: "Session Details", icon: CalendarDays },
+  { key: "vision", label: "Vision Board", icon: Sparkles },
+  { key: "plan", label: "Plan & Prep", icon: CheckCircle2 },
+  { key: "messages", label: "Messages", icon: MessageCircle },
+  { key: "payments", label: "Payments", icon: CreditCard },
+  { key: "gallery", label: "Gallery", icon: ImageIcon },
+];
+
+const BOTTOM_NAV = [
+  { key: "overview", label: "Home", icon: Home },
+  { key: "documents", label: "Docs", icon: FileText },
+  { key: "messages", label: "Messages", icon: MessageCircle },
+  { key: "payments", label: "Payments", icon: CreditCard },
 ];
 
 const SLOT_OPTIONS = [
@@ -72,10 +86,25 @@ export default function ClientApp({ selectedBundle, actions }) {
           {page === "documents" && <DocumentsPage selectedBundle={selectedBundle} actions={actions} />}
           {page === "details" && <DetailsPage selectedBundle={selectedBundle} />}
           {page === "vision" && <VisionPage selectedBundle={selectedBundle} />}
+          {page === "plan" && <PlanPage selectedBundle={selectedBundle} />}
           {page === "messages" && <MessagesPage selectedBundle={selectedBundle} actions={actions} />}
           {page === "payments" && <PaymentsPage selectedBundle={selectedBundle} actions={actions} />}
+          {page === "gallery" && <GalleryPage selectedBundle={selectedBundle} />}
         </div>
       </main>
+
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex justify-around py-2" style={{ background: "#fff", borderTop: `1px solid ${C.line}` }}>
+        {BOTTOM_NAV.map((item) => {
+          const Icon = item.icon;
+          const active = page === item.key;
+          return (
+            <button key={item.key} onClick={() => setPage(item.key)} className="flex flex-col items-center gap-0.5 px-2">
+              <Icon size={18} color={active ? C.forest : C.taupe} />
+              <span className="text-[10px]" style={{ color: active ? C.forest : C.taupe }}>{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -92,13 +121,15 @@ function PortalSidebar({ page, setPage, clientName, sessionType }) {
       <nav className="space-y-1 flex-1">
         {NAV.map((item) => {
           const active = page === item.key;
+          const Icon = item.icon;
           return (
             <button
               key={item.key}
               onClick={() => setPage(item.key)}
-              className="w-full flex items-center px-3 py-2.5 rounded-xl text-sm"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm"
               style={{ background: active ? C.forest : "transparent", color: active ? "#fff" : C.cream }}
             >
+              <Icon size={15} />
               {item.label}
             </button>
           );
@@ -262,26 +293,152 @@ function DetailsPage({ selectedBundle }) {
 }
 
 function VisionPage({ selectedBundle }) {
-  if (!(selectedBundle.portal?.sessionVision || selectedBundle.portal?.propList?.length)) {
+  const portal = selectedBundle.portal;
+  const images = portal?.visionImages || [];
+  const [mode, setMode] = useState("slideshow");
+  const [slide, setSlide] = useState(0);
+
+  if (!(portal?.sessionVision || portal?.propList?.length || images.length)) {
     return <LockedCard body="The styling board will appear here once planning is underway." />;
   }
+
+  const total = Math.max(images.length, 1);
+  const active = images[slide % total];
+
   return (
-    <Card className="p-5">
-      <p className="ecc-display text-3xl mb-4" style={{ color: C.ink }}>Vision Board</p>
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_0.9fr] gap-4">
-        <div className="rounded-2xl p-5" style={{ background: C.bg }}>
-          <p className="text-sm leading-7" style={{ color: C.ink }}>{selectedBundle.portal.sessionVision}</p>
-        </div>
-        <div className="space-y-2">
-          {(selectedBundle.portal.propList || []).map((prop, index) => (
-            <div key={`${prop}-${index}`} className="rounded-2xl p-3 flex items-center gap-3" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
-              <ImageIcon size={16} color={C.taupe} />
-              <span className="text-sm" style={{ color: C.ink }}>{prop}</span>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="ecc-display text-3xl" style={{ color: C.ink }}>Vision Board</p>
+        {images.length > 0 && (
+          <button onClick={() => setMode(mode === "slideshow" ? "grid" : "slideshow")} className="text-sm underline" style={{ color: C.forest }}>
+            {mode === "slideshow" ? "View as grid" : "View as slideshow"}
+          </button>
+        )}
+      </div>
+
+      {images.length === 0 ? (
+        <Card className="p-10 text-center">
+          <ImageIcon size={24} color={C.taupe} className="mx-auto mb-3" />
+          <p className="text-sm" style={{ color: C.charcoal }}>Your studio hasn't added inspiration images yet — check back soon.</p>
+        </Card>
+      ) : mode === "slideshow" ? (
+        <Card className="overflow-hidden">
+          <button onClick={() => setMode("grid")} className="w-full aspect-[4/5] flex items-center justify-center relative overflow-hidden" style={{ background: "#000" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={active?.url} alt="" className="w-full h-full object-cover" />
+            <span className="absolute bottom-3 right-3 text-xs px-2 py-1 rounded-full" style={{ background: "rgba(0,0,0,0.45)", color: "#fff" }}>
+              {(slide % total) + 1} / {total} · tap for full board
+            </span>
+          </button>
+          <div className="flex items-center justify-between p-3">
+            <button onClick={(event) => { event.stopPropagation(); setSlide((s) => (s - 1 + total) % total); }}><ChevronLeft size={18} color={C.charcoal} /></button>
+            <p className="text-xs" style={{ color: C.taupe }}>Swipe through inspiration, or view the full Pinterest-style board</p>
+            <button onClick={(event) => { event.stopPropagation(); setSlide((s) => (s + 1) % total); }}><ChevronRight size={18} color={C.charcoal} /></button>
+          </div>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-3 gap-2">
+          {images.map((image) => (
+            <div key={image.id} className="aspect-square rounded-xl overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={image.url} alt="" className="w-full h-full object-cover" />
             </div>
           ))}
         </div>
+      )}
+
+      <Card className="p-5">
+        <p className="text-sm leading-7 italic" style={{ color: C.ink }}>{portal.sessionVision}</p>
+      </Card>
+      {(portal.propList || []).length > 0 && (
+        <Card className="p-5">
+          <p className="text-[10px] uppercase tracking-[0.3em] mb-3" style={{ color: C.taupe }}>Prop List</p>
+          <div className="space-y-2">
+            {portal.propList.filter(Boolean).map((prop, index) => (
+              <div key={`${prop}-${index}`} className="rounded-2xl p-3 flex items-center gap-3" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+                <Circle size={6} color={C.taupe} fill={C.taupe} />
+                <span className="text-sm" style={{ color: C.ink }}>{prop}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function PlanPage({ selectedBundle }) {
+  const session = selectedBundle.session;
+  const steps = [
+    { label: "Session Booked", done: selectedBundle.booking.isBooked, date: session?.projectCreatedAt || "" },
+    { label: "Planning & Inspiration", done: Boolean(selectedBundle.portal?.sessionVision), date: "In progress" },
+    { label: "Session Day", done: session?.status === "completed", date: session?.sessionDate || "Awaiting selection" },
+    { label: "Gallery Delivery", done: session?.galleryStatus === "delivered", date: "2-3 weeks after session" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <p className="ecc-display text-3xl" style={{ color: C.ink }}>Plan &amp; Prep</p>
+      <Card className="p-5">
+        <p className="text-[10px] uppercase tracking-[0.3em] mb-2" style={{ color: C.taupe }}>Prep Notes</p>
+        <p className="text-sm leading-7" style={{ color: C.ink }}>
+          {selectedBundle.portal?.sessionNotes || "Hydrate well and get plenty of rest the night before your session."}
+        </p>
+      </Card>
+      <Card className="p-5">
+        <p className="text-[10px] uppercase tracking-[0.3em] mb-3" style={{ color: C.taupe }}>What's Next</p>
+        <div className="space-y-3">
+          {steps.map((step) => (
+            <div key={step.label} className="flex items-center gap-3">
+              {step.done ? <CheckCircle2 size={16} color={C.forest} /> : <Circle size={16} color={C.taupe} />}
+              <div>
+                <p className="text-sm" style={{ color: C.ink }}>{step.label}</p>
+                <p className="text-xs" style={{ color: C.taupe }}>{step.date}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function GalleryPage({ selectedBundle }) {
+  const session = selectedBundle.session;
+  const delivered = session?.galleryStatus === "delivered";
+  const images = selectedBundle.portal?.galleryImages || [];
+
+  if (!delivered) {
+    return (
+      <div className="space-y-4">
+        <p className="ecc-display text-3xl" style={{ color: C.ink }}>Gallery</p>
+        <LockedCard body="Your gallery will be available here 2-3 weeks after your session." />
       </div>
-    </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="ecc-display text-3xl" style={{ color: C.ink }}>Your Gallery</p>
+      {images.length === 0 ? (
+        <Card className="p-10 text-center">
+          <ImageIcon size={24} color={C.taupe} className="mx-auto mb-3" />
+          <p className="text-sm" style={{ color: C.charcoal }}>Marked delivered, but no images uploaded yet — check back soon.</p>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {images.map((image) => (
+            <div key={image.id} className="aspect-square rounded-xl overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={image.url} alt="" className="w-full h-full object-cover" />
+            </div>
+          ))}
+        </div>
+      )}
+      <button className="w-full py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>
+        Download Full Gallery
+      </button>
+    </div>
   );
 }
 

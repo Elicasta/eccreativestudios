@@ -1,24 +1,39 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import {
+  AlertTriangle,
   Bell,
   CalendarDays,
+  Check,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
+  ChevronsRight,
   ClipboardList,
   CreditCard,
   FileSignature,
   FileText,
   FolderKanban,
+  Image as ImageIcon,
   Inbox,
   LayoutTemplate,
   Mail,
+  Megaphone,
+  Menu,
+  MessageCircle,
+  Palette,
+  PenLine,
   Plus,
   Receipt,
   Search,
+  Send,
+  Settings as SettingsIcon,
   Sparkles,
+  UserCog,
   Users,
+  Workflow,
+  X,
 } from "lucide-react";
 import { C } from "../lib/brand";
 import {
@@ -41,9 +56,26 @@ const NAV = [
   { key: "invoices", label: "Invoices", icon: Receipt },
   { key: "payments", label: "Payments", icon: CreditCard },
   { key: "sessions", label: "Sessions", icon: CalendarDays },
+  { key: "calendar", label: "Calendar", icon: CalendarDays },
   { key: "portal", label: "Portal Editor", icon: LayoutTemplate },
   { key: "emails", label: "Emails", icon: Mail },
+  { key: "marketing", label: "Email Marketing", icon: Megaphone },
+  { key: "social", label: "Social Messaging", icon: MessageCircle },
+  { key: "forms", label: "Contact Forms", icon: ClipboardList },
+  { key: "templates", label: "Templates", icon: LayoutTemplate },
+  { key: "workflows", label: "Workflows", icon: Workflow },
   { key: "activity", label: "Activity", icon: Bell },
+  { key: "settings", label: "Settings", icon: SettingsIcon },
+  { key: "branding", label: "Branding", icon: Palette },
+  { key: "team", label: "Team", icon: UserCog },
+];
+
+const BOTTOM_NAV = [
+  { key: "dashboard", label: "Home", icon: FolderKanban },
+  { key: "clients", label: "Clients", icon: Users },
+  { key: "inquiries", label: "Inquiries", icon: Inbox },
+  { key: "activity", label: "Alerts", icon: Bell },
+  { key: "__more", label: "More", icon: Menu },
 ];
 
 const SLOT_OPTIONS = [
@@ -55,6 +87,7 @@ const SLOT_OPTIONS = [
 export default function AdminApp({ state, selectedBundle, actions, setApp }) {
   const [page, setPage] = useState("dashboard");
   const [query, setQuery] = useState("");
+  const [drawer, setDrawer] = useState(false);
 
   const filteredClients = useMemo(() => {
     const lower = query.trim().toLowerCase();
@@ -64,14 +97,28 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
     );
   }, [query, state.clients]);
 
+  const go = (nextPage) => {
+    setPage(nextPage);
+    setDrawer(false);
+  };
+
   return (
     <div className="flex" style={{ minHeight: "calc(100vh - 44px)" }}>
       <aside className="hidden md:flex md:flex-col w-72 shrink-0 px-4 py-6" style={{ background: C.charcoal }}>
-        <Sidebar page={page} setPage={setPage} />
+        <Sidebar page={page} setPage={go} />
       </aside>
 
-      <main className="flex-1 min-w-0">
-        <Topbar query={query} setQuery={setQuery} />
+      {drawer && (
+        <div className="fixed inset-0 z-40 flex md:hidden">
+          <div className="w-72 px-4 py-6 overflow-y-auto" style={{ background: C.charcoal }}>
+            <Sidebar page={page} setPage={go} onClose={() => setDrawer(false)} />
+          </div>
+          <div className="flex-1" style={{ background: "rgba(0,0,0,0.4)" }} onClick={() => setDrawer(false)} />
+        </div>
+      )}
+
+      <main className="flex-1 min-w-0 pb-16 md:pb-0">
+        <Topbar query={query} setQuery={setQuery} onMenu={() => setDrawer(true)} />
         <div className="p-4 sm:p-6 lg:p-8 max-w-[1520px] mx-auto space-y-5">
           {page === "dashboard" && (
             <DashboardPage
@@ -79,7 +126,7 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
               selectedBundle={selectedBundle}
               filteredClients={filteredClients}
               actions={actions}
-              setPage={setPage}
+              setPage={go}
               setApp={setApp}
             />
           )}
@@ -91,34 +138,63 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
               selectedBundle={selectedBundle}
               filteredClients={filteredClients}
               actions={actions}
-              setPage={setPage}
+              setPage={go}
             />
           )}
-          {page === "projects" && <ProjectsPage selectedBundle={selectedBundle} actions={actions} setPage={setPage} />}
+          {page === "projects" && <ProjectsPage state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
           {page === "quotes" && <QuotesPage state={state} selectedBundle={selectedBundle} actions={actions} />}
           {page === "contracts" && <ContractsPage selectedBundle={selectedBundle} actions={actions} />}
           {page === "invoices" && <InvoicesPage state={state} selectedBundle={selectedBundle} actions={actions} />}
           {page === "payments" && <PaymentsPage state={state} selectedBundle={selectedBundle} actions={actions} />}
           {page === "sessions" && <SessionsPage state={state} selectedBundle={selectedBundle} actions={actions} />}
+          {page === "calendar" && <CalendarPage state={state} selectedBundle={selectedBundle} actions={actions} />}
           {page === "portal" && <PortalPage selectedBundle={selectedBundle} actions={actions} setApp={setApp} />}
           {page === "emails" && <EmailsPage selectedBundle={selectedBundle} actions={actions} />}
+          {page === "marketing" && <MarketingPage state={state} />}
+          {page === "social" && <SocialPage />}
+          {page === "forms" && <FormsPage />}
+          {page === "templates" && <TemplatesPage />}
+          {page === "workflows" && <PlaceholderPage title="Workflows" body="Automation rules (auto-send prep guide, auto-remind on unpaid invoice) live here in v2. This skeleton moves clients through the pipeline via real actions and Manual Override instead." />}
           {page === "activity" && <ActivityPage state={state} />}
+          {page === "settings" && <PlaceholderPage title="Settings" body="Studio info, tax rates, payment methods, notification preferences." />}
+          {page === "branding" && <PlaceholderPage title="Branding" body="Logo, color palette, fonts. The app already runs on the real EC Creative Studios system: charcoal, cream, taupe, blue, forest green." />}
+          {page === "team" && <PlaceholderPage title="Team" body="Add Emily and any second shooters or editors with role-based access once auth exists." />}
         </div>
       </main>
+
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex justify-around py-2" style={{ background: C.charcoal }}>
+        {BOTTOM_NAV.map((item) => {
+          const Icon = item.icon;
+          const active = item.key === "__more" ? drawer : page === item.key;
+          return (
+            <button
+              key={item.key}
+              onClick={() => (item.key === "__more" ? setDrawer(true) : go(item.key))}
+              className="flex flex-col items-center gap-0.5 px-2"
+            >
+              <Icon size={18} color={active ? "#fff" : C.taupe} />
+              <span className="text-[10px]" style={{ color: active ? "#fff" : C.taupe }}>{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function Sidebar({ page, setPage }) {
+function Sidebar({ page, setPage, onClose }) {
   return (
     <>
-      <div className="mb-8 px-1">
-        <p className="ecc-display text-white text-2xl leading-none">EC</p>
-        <p className="text-[10px] uppercase tracking-[0.35em]" style={{ color: C.taupe }}>
-          Creative Studios
-        </p>
+      <div className="mb-8 px-1 flex items-center justify-between">
+        <div>
+          <p className="ecc-display text-white text-2xl leading-none">EC</p>
+          <p className="text-[10px] uppercase tracking-[0.35em]" style={{ color: C.taupe }}>
+            Creative Studios
+          </p>
+        </div>
+        {onClose && <button onClick={onClose}><X size={18} color={C.taupe} /></button>}
       </div>
-      <nav className="space-y-1 flex-1">
+      <nav className="space-y-1 flex-1 overflow-y-auto ecc-scrollbar">
         {NAV.map((item) => {
           const Icon = item.icon;
           const active = item.key === page;
@@ -142,9 +218,10 @@ function Sidebar({ page, setPage }) {
   );
 }
 
-function Topbar({ query, setQuery }) {
+function Topbar({ query, setQuery, onMenu }) {
   return (
     <div className="flex items-center gap-3 px-4 sm:px-6 py-4" style={{ borderBottom: `1px solid ${C.line}` }}>
+      <button className="md:hidden" onClick={onMenu}><Menu size={20} color={C.ink} /></button>
       <p className="ecc-display text-2xl flex-1" style={{ color: C.ink }}>
         Studio Admin
       </p>
@@ -408,15 +485,55 @@ function ClientsPage({ state, selectedBundle, filteredClients, actions, setPage 
   );
 }
 
-function ProjectsPage({ selectedBundle, actions, setPage }) {
+function ProjectsPage({ state, selectedBundle, actions, setPage }) {
+  return (
+    <div className="space-y-5">
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-1">
+          <SectionLabel icon={FolderKanban}>Project Folders</SectionLabel>
+          <Pill tone="info">One folder per client</Pill>
+        </div>
+        <p className="text-sm px-5 pb-3" style={{ color: C.charcoal }}>
+          Every client gets a folder. A project only lands inside it once they're actually booked — quote accepted, contract
+          signed, payment received. Click a folder to open that client's workspace below.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-5 pb-5">
+          {state.clients.map((client) => {
+            const bundle = getClientBundle(state, client.id);
+            const isOpen = client.id === state.selectedClientId;
+            return (
+              <button key={client.id} onClick={() => actions.selectClient(client.id)} className="text-left">
+                <Card className="p-4" style={{ borderColor: isOpen ? C.taupe : C.line }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <FolderKanban size={20} color={bundle.projectStatus.projectCreated ? C.forest : C.taupe} />
+                    {bundle.projectStatus.projectCreated && <Pill tone="done">1 project</Pill>}
+                  </div>
+                  <p className="text-sm font-medium" style={{ color: C.ink }}>{client.name}</p>
+                  <p className="text-xs mt-1" style={{ color: C.taupe }}>
+                    {bundle.projectStatus.projectCreated ? bundle.client.sessionType : "No project yet"}
+                  </p>
+                </Card>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      <ProjectWorkspaceCard selectedBundle={selectedBundle} actions={actions} setPage={setPage} />
+    </div>
+  );
+}
+
+function ProjectWorkspaceCard({ selectedBundle, actions, setPage }) {
   if (!selectedBundle.client) {
-    return <EmptyState title="No client selected" body="Select a client to view the booking gate and project handoff." />;
+    return <EmptyState title="No client selected" body="Open a folder above to view the booking gate and project handoff." />;
   }
 
   const { booking, projectStatus, session, portal } = selectedBundle;
   const canSendPortal = projectStatus.projectCreated && !projectStatus.portalAccessSent;
   const canSendAvailability = projectStatus.projectCreated && !session?.sessionDate;
   const canSendCalendarInvite = Boolean(session?.sessionDate) && !projectStatus.calendarInviteSent;
+  const canDeliverGallery = session?.status === "completed" && session?.galleryStatus !== "delivered";
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-5">
@@ -441,6 +558,9 @@ function ProjectsPage({ selectedBundle, actions, setPage }) {
             </button>
             <button disabled={booking.isBooked} onClick={() => actions.sendBookingReminder(selectedBundle.client.id)} className="px-3 py-2 rounded-full text-xs font-medium disabled:opacity-40" style={{ background: "#f8ece8", color: C.red }}>
               Send not-booked reminder
+            </button>
+            <button disabled={!canDeliverGallery} onClick={() => actions.deliverGallery(selectedBundle.client.id)} className="px-3 py-2 rounded-full text-xs font-medium disabled:opacity-40" style={{ background: "#eef0e3", color: C.forest }}>
+              Deliver gallery
             </button>
           </div>
         </Card>
@@ -475,10 +595,11 @@ function ProjectsPage({ selectedBundle, actions, setPage }) {
                 <p className="text-sm mt-3 leading-7" style={{ color: C.ink }}>{portal?.sessionNotes || "Portal notes not written yet."}</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <SummaryChip label="Date" value={session?.sessionDate || "Awaiting selection"} />
               <SummaryChip label="Time" value={session?.sessionTime || "Awaiting selection"} />
               <SummaryChip label="Props" value={portal?.propList?.length ? `${portal.propList.length} listed` : "Not started"} />
+              <SummaryChip label="Gallery" value={session?.galleryStatus === "delivered" ? "Delivered" : session?.galleryStatus === "ready_for_delivery" ? "Ready" : "Not ready"} />
             </div>
           </>
         )}
@@ -825,29 +946,164 @@ function PortalPage({ selectedBundle, actions, setApp }) {
   }
 
   const update = (patch) => actions.updatePortal(selectedBundle.client.id, patch);
+  const addProp = () => update({ propList: [...(portal.propList || []), ""] });
+  const removeProp = (index) => update({ propList: portal.propList.filter((_, itemIndex) => itemIndex !== index) });
+
+  return (
+    <div className="space-y-5">
+      <Card className="p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+          <div>
+            <p className="ecc-display text-3xl" style={{ color: C.ink }}>Client Portal Editor</p>
+            <p className="text-sm mt-1" style={{ color: C.charcoal }}>{selectedBundle.client.name}</p>
+          </div>
+          <button onClick={() => setApp("client")} className="text-sm underline" style={{ color: C.forest }}>Preview client view</button>
+        </div>
+
+        <div className="flex gap-4 mb-3 text-sm">
+          <label className="flex items-center gap-2" style={{ color: C.ink }}>
+            <input type="radio" checked={portal.useProjectDetails} onChange={() => update({ useProjectDetails: true })} /> Use project details
+          </label>
+          <label className="flex items-center gap-2" style={{ color: C.ink }}>
+            <input type="radio" checked={!portal.useProjectDetails} onChange={() => update({ useProjectDetails: false })} /> Custom override
+          </label>
+        </div>
+        {portal.useProjectDetails ? (
+          <p className="text-sm px-3 py-2.5 rounded-xl" style={{ background: C.bg, color: C.ink }}>
+            {selectedBundle.session?.sessionDate || "Awaiting date"} · {selectedBundle.session?.sessionTime || "—"} ·{" "}
+            {selectedBundle.client.city} <span style={{ color: C.taupe }}>— pulled from the session record</span>
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Field label="Custom date" value={portal.customDate || ""} onChange={(value) => update({ customDate: value })} />
+            <Field label="Custom time" value={portal.customTime || ""} onChange={(value) => update({ customTime: value })} />
+            <Field label="Custom location" value={portal.customLocation || ""} onChange={(value) => update({ customLocation: value })} />
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-5">
+        <SectionLabel icon={Sparkles}>Session Vision &amp; Notes</SectionLabel>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-5 pb-5 pt-2">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.25em] mb-1.5" style={{ color: C.taupe }}>Session vision</p>
+            <textarea rows={4} value={portal.sessionVision || ""} onChange={(event) => update({ sessionVision: event.target.value })} className="w-full rounded-2xl p-3 text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.25em] mb-1.5" style={{ color: C.taupe }}>Session notes</p>
+            <textarea rows={4} value={portal.sessionNotes || ""} onChange={(event) => update({ sessionNotes: event.target.value })} className="w-full rounded-2xl p-3 text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+          </div>
+        </div>
+        <div className="px-5 pb-5">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Prop list</p>
+            <button onClick={addProp} className="text-xs font-medium flex items-center gap-1" style={{ color: C.forest }}><Plus size={12} /> Add prop</button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {(portal.propList || []).map((prop, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <Field compact value={prop} onChange={(value) => update({ propList: portal.propList.map((item, itemIndex) => (itemIndex === index ? value : item)) })} />
+                <button onClick={() => removeProp(index)}><X size={14} color={C.taupe} /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      <ImageManager
+        title="Vision Board Images"
+        description="Drives the slideshow + Pinterest-style grid the client sees on Vision Board."
+        images={portal.visionImages || []}
+        onChange={(images) => update({ visionImages: images })}
+      />
+
+      <ImageManager
+        title="Gallery Images"
+        description="Stays locked on the client side until the session is marked complete and the gallery is delivered."
+        images={portal.galleryImages || []}
+        onChange={(images) => update({ galleryImages: images })}
+        footer={
+          <button
+            disabled={selectedBundle.session?.status !== "completed" || selectedBundle.session?.galleryStatus === "delivered"}
+            onClick={() => actions.deliverGallery(selectedBundle.client.id)}
+            className="mt-3 px-3 py-2 rounded-full text-xs font-medium text-white disabled:opacity-40"
+            style={{ background: C.forest }}
+          >
+            {selectedBundle.session?.galleryStatus === "delivered" ? "Gallery delivered" : "Deliver gallery to client"}
+          </button>
+        }
+      />
+    </div>
+  );
+}
+
+function ImageManager({ title, description, images, onChange, footer }) {
+  const [urlDraft, setUrlDraft] = useState("");
+  const fileInputRef = useRef(null);
+
+  const addUrl = () => {
+    if (!urlDraft.trim()) return;
+    onChange([...images, { id: `img_${Date.now()}`, url: urlDraft.trim() }]);
+    setUrlDraft("");
+  };
+
+  const handleUpload = (event) => {
+    const files = Array.from(event.target.files || []);
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => onChange([...images, { id: `img_${Date.now()}_${Math.random()}`, url: reader.result }]);
+      reader.readAsDataURL(file);
+    });
+    event.target.value = "";
+  };
+
+  const removeImage = (id) => onChange(images.filter((img) => img.id !== id));
+
   return (
     <Card className="p-5">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <p className="ecc-display text-3xl" style={{ color: C.ink }}>Client Portal Editor</p>
-          <p className="text-sm mt-1" style={{ color: C.charcoal }}>{selectedBundle.client.name}</p>
+      <SectionLabel icon={ImageIcon}>{title}</SectionLabel>
+      <p className="text-sm px-5" style={{ color: C.charcoal }}>{description}</p>
+
+      <div className="px-5 pt-4">
+        {images.length > 0 && (
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 mb-4">
+            {images.map((img) => (
+              <div key={img.id} className="relative aspect-square rounded-xl overflow-hidden" style={{ background: C.bg }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={img.url} alt="" className="w-full h-full object-cover" onError={(event) => { event.currentTarget.style.opacity = 0.15; }} />
+                <button onClick={() => removeImage(img.id)} className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.6)" }}>
+                  <X size={12} color="#fff" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="flex gap-2 sm:col-span-2">
+            <input
+              value={urlDraft}
+              onChange={(event) => setUrlDraft(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && addUrl()}
+              placeholder="Paste an image URL..."
+              className="flex-1 px-3 py-2 rounded-xl text-sm"
+              style={{ border: `1px solid ${C.line}`, color: C.ink }}
+            />
+            <button onClick={addUrl} className="px-3 py-2 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>Add</button>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => fileInputRef.current?.click()} className="flex-1 px-3 py-2 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+              <ChevronsRight size={14} style={{ transform: "rotate(-90deg)" }} /> Upload
+            </button>
+            <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
+          </div>
         </div>
-        <button onClick={() => setApp("client")} className="text-sm underline" style={{ color: C.forest }}>Preview client view</button>
+        <button disabled className="mt-2 w-full px-3 py-2 rounded-xl text-sm flex items-center justify-center gap-1.5" style={{ border: `1px dashed ${C.line}`, color: C.taupe }}>
+          Import from Google Drive — connect in Settings, not wired in this build
+        </button>
+        {footer}
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-        <Field label="Custom date" value={portal.customDate || ""} onChange={(value) => update({ customDate: value, useProjectDetails: false })} />
-        <Field label="Custom time" value={portal.customTime || ""} onChange={(value) => update({ customTime: value, useProjectDetails: false })} />
-        <Field label="Custom location" value={portal.customLocation || ""} onChange={(value) => update({ customLocation: value, useProjectDetails: false })} />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <textarea rows={4} value={portal.sessionVision || ""} onChange={(event) => update({ sessionVision: event.target.value })} className="w-full rounded-2xl p-3 text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
-        <textarea rows={4} value={portal.sessionNotes || ""} onChange={(event) => update({ sessionNotes: event.target.value })} className="w-full rounded-2xl p-3 text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
-      </div>
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-        {(portal.propList || []).map((prop, index) => (
-          <Field key={`${prop}-${index}`} label={`Prop ${index + 1}`} value={prop} onChange={(value) => update({ propList: portal.propList.map((item, itemIndex) => (itemIndex === index ? value : item)) })} />
-        ))}
-      </div>
+      <div className="h-4" />
     </Card>
   );
 }
@@ -892,6 +1148,482 @@ function EmailsPage({ selectedBundle, actions }) {
             </div>
           ))}
         </div>
+      </Card>
+    </div>
+  );
+}
+
+function PlaceholderPage({ title, body }) {
+  return (
+    <div className="space-y-4">
+      <p className="ecc-display text-2xl" style={{ color: C.ink }}>{title}</p>
+      <EmptyState title="Nothing here yet" body={body} />
+    </div>
+  );
+}
+
+function CalendarPage({ state, selectedBundle, actions }) {
+  const [selected, setSelected] = useState(22);
+  const days = Array.from({ length: 30 }, (_, index) => index + 1);
+
+  const eventsByDay = useMemo(() => {
+    const map = {};
+    state.sessions
+      .filter((session) => session.sessionDate)
+      .forEach((session) => {
+        const day = Number((session.sessionDate.match(/\d{1,2}/) || [])[0]);
+        if (!day) return;
+        const bundle = getClientBundle(state, session.clientId);
+        map[day] = map[day] || [];
+        map[day].push({ title: `${bundle.client?.sessionType || "Session"} — ${bundle.client?.name || "Client"}`, time: session.sessionTime, clientId: session.clientId });
+      });
+    return map;
+  }, [state]);
+
+  const dayEvents = eventsByDay[selected] || [];
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-1">
+          <button className="text-xs font-medium px-3 py-1.5 rounded-full" style={{ background: C.cream, color: C.forest }} onClick={() => setSelected(22)}>Today</button>
+          <p className="ecc-display text-2xl" style={{ color: C.ink }}>July 2026</p>
+          <div className="flex gap-3"><ChevronLeft size={18} color={C.charcoal} /><ChevronRight size={18} color={C.charcoal} /></div>
+        </div>
+        <div className="max-w-md mx-auto lg:mx-0">
+          <div className="grid grid-cols-7 gap-1 text-xs mt-4 mb-1">
+            {["S", "M", "T", "W", "T", "F", "S"].map((label, index) => (
+              <div key={index} className="text-center font-medium pb-1" style={{ color: C.taupe }}>{label}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {days.map((day) => {
+              const has = eventsByDay[day];
+              const isSelected = day === selected;
+              return (
+                <button
+                  key={day}
+                  onClick={() => setSelected(day)}
+                  className="aspect-square rounded-full flex items-center justify-center text-sm relative"
+                  style={{ background: isSelected ? C.forest : has ? C.cream : "transparent", color: isSelected ? "#fff" : C.ink }}
+                >
+                  {day}
+                  {has && !isSelected && <span className="absolute bottom-1 w-1 h-1 rounded-full" style={{ background: C.forest }} />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-5 lg:self-start">
+        <p className="text-xs uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>July {selected}, 2026</p>
+        {dayEvents.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>Nothing scheduled.</p>}
+        {dayEvents.map((event, index) => (
+          <button
+            key={index}
+            onClick={() => actions.selectClient(event.clientId)}
+            className="w-full text-left flex items-center gap-3 py-2.5"
+            style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}` }}
+          >
+            <div className="w-1 self-stretch rounded-full" style={{ background: C.forest }} />
+            <div className="flex-1">
+              <p className="text-sm" style={{ color: C.forest }}>{event.title}</p>
+              <p className="text-xs" style={{ color: C.taupe }}>{event.time || "Time TBD"}</p>
+            </div>
+          </button>
+        ))}
+        {selectedBundle.session?.sessionDate && (
+          <p className="text-[11px] mt-3" style={{ color: C.taupe }}>
+            Selected client's session: {selectedBundle.session.sessionDate} at {selectedBundle.session.sessionTime || "TBD"}.
+          </p>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function MarketingPage({ state }) {
+  const segments = useMemo(() => {
+    const counts = {};
+    state.clients.forEach((client) => (client.tags || []).forEach((tag) => { counts[tag] = (counts[tag] || 0) + 1; }));
+    return Object.entries(counts).map(([name, count]) => ({ name, count }));
+  }, [state.clients]);
+
+  const campaigns = [
+    { name: "Fall Mini-Sessions Promo", segment: segments[0]?.name || "All clients", status: "Sent", stats: "41% open · 9% click" },
+    { name: "Welcome Series — New Inquiry", segment: "All inquiries", status: "Automated", stats: "Triggers on inquiry approval" },
+    { name: "Past Client Re-Engagement", segment: "Returning inquiry", status: "Draft", stats: "—" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="ecc-display text-2xl" style={{ color: C.ink }}>Email Marketing</p>
+        <button className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>
+          <Plus size={14} /> New campaign
+        </button>
+      </div>
+      <p className="text-sm max-w-2xl" style={{ color: C.charcoal }}>
+        Built on Resend Audiences. Client tags drive segments automatically — the counts below are real, pulled from the tags
+        already on your client records, not placeholder numbers.
+      </p>
+      <Card className="p-5">
+        <SectionLabel icon={Users}>Segments</SectionLabel>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-5 pb-5">
+          {segments.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>No tags yet.</p>}
+          {segments.map((segment) => (
+            <div key={segment.name} className="rounded-xl p-3" style={{ border: `1px solid ${C.line}` }}>
+              <p className="ecc-display text-2xl" style={{ color: C.ink }}>{segment.count}</p>
+              <p className="text-xs" style={{ color: C.charcoal }}>{segment.name}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card className="p-5">
+        <SectionLabel icon={Mail}>Campaigns</SectionLabel>
+        <div className="px-5 pb-5">
+          {campaigns.map((campaign, index) => (
+            <div key={campaign.name} className="flex items-center justify-between py-3" style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}` }}>
+              <div>
+                <p className="text-sm font-medium" style={{ color: C.ink }}>{campaign.name}</p>
+                <p className="text-xs" style={{ color: C.taupe }}>{campaign.segment} · {campaign.stats}</p>
+              </div>
+              <Pill tone={campaign.status === "Sent" ? "done" : campaign.status === "Automated" ? "info" : "neutral"}>{campaign.status}</Pill>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <EmptyState title="Not wired up" body="Composer, Resend webhook logging, and unsubscribe handling are real build work — this is the shape, not the wiring." />
+    </div>
+  );
+}
+
+const DM_RULES = [
+  { keyword: "MINIS", reply: "Mini-session info + booking link", count: 38 },
+  { keyword: "MATERNITY", reply: "Maternity package PDF + inquiry link", count: 21 },
+  { keyword: "BOOK", reply: "Direct link to the inquiry form", count: 64 },
+];
+
+function SocialPage() {
+  return (
+    <div className="space-y-4">
+      <p className="ecc-display text-2xl" style={{ color: C.ink }}>Social Messaging</p>
+      <p className="text-sm max-w-2xl" style={{ color: C.charcoal }}>
+        Comment-to-DM keyword automation on Instagram. Cold-DMing isn't possible under Meta's rules — this only fires on a
+        user-initiated comment or story reply, then logs the lead straight into Inquiries.
+      </p>
+      <Card className="p-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.cream }}><MessageCircle size={18} color={C.forest} /></div>
+          <div>
+            <p className="text-sm font-medium" style={{ color: C.ink }}>@eccreativeweddings</p>
+            <p className="text-xs" style={{ color: C.taupe }}>Connected · Meta App Review pending</p>
+          </div>
+        </div>
+        <Pill tone="info">Pending Review</Pill>
+      </Card>
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Keyword Rules</p>
+          <button className="flex items-center gap-1 text-xs font-medium" style={{ color: C.forest }}><Plus size={12} /> Add rule</button>
+        </div>
+        {DM_RULES.map((rule, index) => (
+          <div key={rule.keyword} className="flex items-center justify-between py-3" style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}` }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: C.ink }}>"{rule.keyword}"</p>
+              <p className="text-xs" style={{ color: C.charcoal }}>{rule.reply}</p>
+            </div>
+            <Pill>{rule.count} triggered</Pill>
+          </div>
+        ))}
+      </Card>
+      <EmptyState title="Webhook not connected" body="Needs a Meta Developer App with instagram_business_manage_messages, approved through App Review — weeks to months. Start that early; this page is ready for it." />
+    </div>
+  );
+}
+
+const FORM_FIELD_TYPES = [
+  { key: "short", label: "Short Text", icon: PenLine },
+  { key: "long", label: "Long Text", icon: ClipboardList },
+  { key: "choice", label: "Multiple Choice", icon: CheckCircle2 },
+  { key: "checkbox", label: "Checkboxes", icon: Check },
+  { key: "email", label: "Email", icon: Mail },
+  { key: "date", label: "Date", icon: CalendarDays },
+];
+
+const SEED_FORMS = [
+  { id: "f1", name: "Let's Get Started — Tell Us About You!", status: "Published", platforms: ["Website"], fields: [{ id: 1, type: "short", label: "Full Name" }, { id: 2, type: "email", label: "Email Address" }, { id: 3, type: "choice", label: "Session Type" }] },
+  { id: "f2", name: "Wedding Inquiry", status: "Published", platforms: ["Website", "Instagram Bio"], fields: [{ id: 1, type: "short", label: "Couple's Names" }, { id: 2, type: "date", label: "Wedding Date" }] },
+  { id: "f3", name: "Mini Session Signup", status: "Draft", platforms: [], fields: [{ id: 1, type: "short", label: "Full Name" }] },
+];
+
+const PLATFORM_OPTIONS = ["Website", "Instagram Bio", "Inquiry Page", "Email Signature"];
+
+function FormsPage() {
+  const [forms, setForms] = useState(SEED_FORMS);
+  const [openId, setOpenId] = useState(null);
+  const current = forms.find((form) => form.id === openId);
+
+  const update = (fn) => setForms((list) => list.map((form) => (form.id === openId ? fn(form) : form)));
+  const addField = (type) => update((form) => ({ ...form, fields: [...form.fields, { id: Date.now(), type, label: FORM_FIELD_TYPES.find((entry) => entry.key === type).label }] }));
+  const removeField = (id) => update((form) => ({ ...form, fields: form.fields.filter((field) => field.id !== id) }));
+  const updateLabel = (id, label) => update((form) => ({ ...form, fields: form.fields.map((field) => (field.id === id ? { ...field, label } : field)) }));
+  const togglePlatform = (platform) => update((form) => ({ ...form, platforms: form.platforms.includes(platform) ? form.platforms.filter((entry) => entry !== platform) : [...form.platforms, platform] }));
+
+  const newForm = () => {
+    const id = `f_${Date.now()}`;
+    setForms((list) => [{ id, name: "Untitled Form", status: "Draft", platforms: [], fields: [] }, ...list]);
+    setOpenId(id);
+  };
+
+  if (current) {
+    const slug = current.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <button onClick={() => setOpenId(null)} className="text-xs flex items-center gap-1" style={{ color: C.charcoal }}><ChevronLeft size={14} /> All Forms</button>
+          <Pill tone={current.status === "Published" ? "done" : "neutral"}>{current.status}</Pill>
+        </div>
+        <input value={current.name} onChange={(event) => update((form) => ({ ...form, name: event.target.value }))} className="ecc-display text-2xl bg-transparent outline-none w-full" style={{ color: C.ink }} />
+
+        <Card className="p-4">
+          <p className="text-xs uppercase tracking-[0.25em] mb-2" style={{ color: C.taupe }}>Usable on</p>
+          <div className="flex flex-wrap gap-2">
+            {PLATFORM_OPTIONS.map((platform) => {
+              const active = current.platforms.includes(platform);
+              return (
+                <button key={platform} onClick={() => togglePlatform(platform)} className="text-xs px-3 py-1.5 rounded-full font-medium" style={{ background: active ? C.forest : C.cream, color: active ? "#fff" : C.ink }}>
+                  {platform}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs mt-3" style={{ color: C.taupe }}>eccreative.com/forms/{slug || "untitled"}</p>
+        </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-4">
+          <Card className="p-4">
+            <p className="text-xs uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Fields</p>
+            {current.fields.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>No fields yet. Add one from the right.</p>}
+            <div className="space-y-2">
+              {current.fields.map((field) => {
+                const Icon = FORM_FIELD_TYPES.find((entry) => entry.key === field.type)?.icon || PenLine;
+                return (
+                  <div key={field.id} className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ border: `1px solid ${C.line}` }}>
+                    <Icon size={14} color={C.taupe} />
+                    <input value={field.label} onChange={(event) => updateLabel(field.id, event.target.value)} className="flex-1 text-sm bg-transparent outline-none" style={{ color: C.ink }} />
+                    <button onClick={() => removeField(field.id)}><X size={14} color={C.taupe} /></button>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+          <Card className="p-4 h-fit">
+            <p className="text-xs uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Add a field</p>
+            <div className="grid grid-cols-2 gap-2">
+              {FORM_FIELD_TYPES.map((type) => {
+                const Icon = type.icon;
+                return (
+                  <button key={type.key} onClick={() => addField(type.key)} className="flex flex-col items-center gap-1.5 p-3 rounded-xl text-center" style={{ border: `1px solid ${C.line}` }}>
+                    <Icon size={16} color={C.forest} />
+                    <span className="text-[11px]" style={{ color: C.ink }}>{type.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="ecc-display text-2xl" style={{ color: C.ink }}>Contact Forms</p>
+        <button onClick={newForm} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>
+          <Plus size={14} /> New Contact Form
+        </button>
+      </div>
+      <p className="text-sm max-w-2xl" style={{ color: C.charcoal }}>Build a form once, drop it anywhere — website, Instagram bio link, inquiry page. Submissions land in Inquiries.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {forms.map((form) => (
+          <Card key={form.id} className="p-4">
+            <div className="aspect-[16/9] rounded-xl mb-3 flex items-center justify-center" style={{ background: C.bg }}>
+              <ClipboardList size={20} color={C.taupe} />
+            </div>
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <p className="text-sm font-medium" style={{ color: C.ink }}>{form.name}</p>
+              {form.status === "Draft" && <Pill>Draft</Pill>}
+            </div>
+            <p className="text-xs mb-3" style={{ color: C.taupe }}>{form.platforms.length ? form.platforms.join(" · ") : "Not placed anywhere yet"}</p>
+            <button onClick={() => setOpenId(form.id)} className="w-full py-2 rounded-xl text-sm font-medium" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+              {form.status === "Draft" ? "Edit Draft" : "View Form"}
+            </button>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const Toggle = ({ checked, onChange }) => (
+  <button onClick={() => onChange(!checked)} className="w-9 h-5 rounded-full relative shrink-0 transition" style={{ background: checked ? C.forest : C.line }}>
+    <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition" style={{ left: checked ? 18 : 2 }} />
+  </button>
+);
+
+const TEMPLATE_TABS = [
+  { key: "contracts", label: "Contracts" },
+  { key: "invoices", label: "Invoices" },
+  { key: "quotes", label: "Quotes" },
+  { key: "questionnaires", label: "Questionnaires" },
+  { key: "emails", label: "Emails" },
+];
+
+const SEED_TEMPLATES = {
+  contracts: [
+    { id: "c1", name: "Maternity Session Contract", created: "Jan 17, 2026", body: "This agreement outlines the terms of {{client_name}}'s session on {{session_date}}.", settings: { signatureRequired: true, documentExpiry: false, documentReminders: true } },
+    { id: "c2", name: "Wedding Photography Contract", created: "Jun 18, 2025", body: "Photography services agreement between EC Creative Studios and {{client_name}}.", settings: { signatureRequired: true, documentExpiry: false, documentReminders: true } },
+  ],
+  invoices: [
+    { id: "i1", name: "Deposit Invoice", created: "Feb 1, 2026", body: "Deposit due to secure {{session_date}}.", settings: { paymentDue: "Within 7 days" } },
+    { id: "i2", name: "Final Balance Invoice", created: "Mar 4, 2026", body: "Remaining balance due before session.", settings: { paymentDue: "Within 30 days" } },
+  ],
+  quotes: [
+    { id: "q1", name: "Signature Experience Quote", created: "Jan 2, 2026", body: "A fully curated photography experience for {{client_name}}.", settings: { autoCreateInvoice: true, documentExpiry: false, documentReminders: false } },
+  ],
+  questionnaires: [
+    { id: "qq1", name: "Session Prep Questionnaire", created: "Jan 10, 2026", body: "Help us prepare for your session.", settings: { documentExpiry: false, documentReminders: true } },
+  ],
+  emails: [
+    { id: "e1", name: "Welcome Email — New Inquiry", created: "Jan 5, 2026", subject: "Thanks for reaching out, {{client_name}}!", body: "We're so excited to learn more about your {{session_type}}." },
+    { id: "e2", name: "Booking Confirmation", created: "Jan 5, 2026", subject: "You're booked, {{client_name}}!", body: "Your {{session_type}} is confirmed for {{session_date}}." },
+  ],
+};
+
+const TEMPLATE_VARIABLES = ["{{client_name}}", "{{session_type}}", "{{session_date}}", "{{session_time}}", "{{location}}", "{{total}}", "{{deposit}}"];
+
+function TemplatesPage() {
+  const [tab, setTab] = useState("contracts");
+  const [data, setData] = useState(SEED_TEMPLATES);
+  const [editing, setEditing] = useState(null);
+
+  const list = data[tab];
+  const current = editing && data[editing.type].find((entry) => entry.id === editing.id);
+
+  const updateField = (field, value) => setData((d) => ({ ...d, [editing.type]: d[editing.type].map((entry) => (entry.id === editing.id ? { ...entry, [field]: value } : entry)) }));
+  const updateSetting = (key, value) => setData((d) => ({ ...d, [editing.type]: d[editing.type].map((entry) => (entry.id === editing.id ? { ...entry, settings: { ...entry.settings, [key]: value } } : entry)) }));
+  const insertVariable = (variable) => updateField("body", `${current.body || ""} ${variable}`);
+
+  const newTemplate = () => {
+    const id = `${tab}_${Date.now()}`;
+    const blank = tab === "emails"
+      ? { id, name: "Untitled Email Template", created: "Just now", subject: "", body: "" }
+      : { id, name: `Untitled ${TEMPLATE_TABS.find((entry) => entry.key === tab).label.replace(/s$/, "")} Template`, created: "Just now", body: "", settings: tab === "invoices" ? { paymentDue: "Within 30 days" } : tab === "quotes" ? { autoCreateInvoice: true, documentExpiry: false, documentReminders: false } : { documentExpiry: false, documentReminders: false, ...(tab === "contracts" ? { signatureRequired: true } : {}) } };
+    setData((d) => ({ ...d, [tab]: [blank, ...d[tab]] }));
+    setEditing({ type: tab, id });
+  };
+
+  if (editing && current) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button onClick={() => setEditing(null)}><ChevronLeft size={16} color={C.charcoal} /></button>
+            <input value={current.name} onChange={(event) => updateField("name", event.target.value)} className="ecc-display text-xl bg-transparent outline-none" style={{ color: C.ink }} />
+          </div>
+          <button onClick={() => setEditing(null)} className="px-4 py-2 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>Done</button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4">
+          {editing.type !== "emails" ? (
+            <Card className="p-4 h-fit">
+              <p className="text-xs uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Template Settings</p>
+              <div className="space-y-4">
+                {editing.type === "contracts" && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm" style={{ color: C.ink }}>Signature required</span>
+                    <Toggle checked={!!current.settings.signatureRequired} onChange={(value) => updateSetting("signatureRequired", value)} />
+                  </div>
+                )}
+                {editing.type === "quotes" && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm" style={{ color: C.ink }}>Auto-create invoice</span>
+                    <Toggle checked={!!current.settings.autoCreateInvoice} onChange={(value) => updateSetting("autoCreateInvoice", value)} />
+                  </div>
+                )}
+                {editing.type === "invoices" ? (
+                  <div>
+                    <p className="text-sm mb-1.5" style={{ color: C.ink }}>Payment due</p>
+                    <select value={current.settings.paymentDue} onChange={(event) => updateSetting("paymentDue", event.target.value)} className="w-full px-3 py-2 rounded-xl text-sm" style={{ border: `1px solid ${C.line}` }}>
+                      {["Within 7 days", "Within 14 days", "Within 30 days", "On receipt"].map((option) => <option key={option}>{option}</option>)}
+                    </select>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm" style={{ color: C.ink }}>Document expiry</span>
+                      <Toggle checked={!!current.settings.documentExpiry} onChange={(value) => updateSetting("documentExpiry", value)} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm" style={{ color: C.ink }}>Document reminders</span>
+                      <Toggle checked={!!current.settings.documentReminders} onChange={(value) => updateSetting("documentReminders", value)} />
+                    </div>
+                  </>
+                )}
+              </div>
+            </Card>
+          ) : <div className="hidden lg:block" />}
+
+          <Card className="p-5">
+            {editing.type === "emails" && (
+              <input value={current.subject} onChange={(event) => updateField("subject", event.target.value)} placeholder="Subject" className="w-full mb-3 px-3 py-2 rounded-xl text-sm font-medium" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+            )}
+            <div className="flex items-center gap-1 mb-3 pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+              <div className="flex-1" />
+              <select onChange={(event) => { if (event.target.value) { insertVariable(event.target.value); event.target.value = ""; } }} className="text-xs px-2 py-1 rounded-lg" style={{ border: `1px solid ${C.line}`, color: C.charcoal }}>
+                <option value="">Insert Field</option>
+                {TEMPLATE_VARIABLES.map((variable) => <option key={variable} value={variable}>{variable}</option>)}
+              </select>
+            </div>
+            <textarea value={current.body} onChange={(event) => updateField("body", event.target.value)} rows={12} placeholder={`Start typing your ${editing.type === "emails" ? "email" : editing.type.replace(/s$/, "")} template...`} className="w-full text-sm outline-none resize-none" style={{ color: C.ink }} />
+            {editing.type === "contracts" && (
+              <div className="mt-4 pt-4 text-sm" style={{ borderTop: `1px solid ${C.line}`, color: C.charcoal }}>
+                <p className="font-medium mb-2" style={{ color: C.ink }}>Signatures</p>
+                <p>Your Client _______________________</p>
+                <p className="mt-2">EC Creative Studios _______________________</p>
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="ecc-display text-2xl" style={{ color: C.ink }}>Templates</p>
+        <button onClick={newTemplate} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>
+          <Plus size={14} /> New Template
+        </button>
+      </div>
+      <div className="flex gap-1 overflow-x-auto ecc-scrollbar">
+        {TEMPLATE_TABS.map((tabOption) => (
+          <button key={tabOption.key} onClick={() => setTab(tabOption.key)} className="px-3.5 py-2 rounded-full text-sm font-medium shrink-0" style={{ background: tab === tabOption.key ? C.charcoal : "transparent", color: tab === tabOption.key ? "#fff" : C.charcoal }}>
+            {tabOption.label}
+          </button>
+        ))}
+      </div>
+      <Card>
+        {list.map((template, index) => (
+          <button key={template.id} onClick={() => setEditing({ type: tab, id: template.id })} className="w-full flex items-center justify-between px-5 py-3.5 text-left" style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}` }}>
+            <span className="text-sm font-medium" style={{ color: C.ink }}>{template.name}</span>
+            <span className="text-xs" style={{ color: C.taupe }}>{template.created}</span>
+          </button>
+        ))}
       </Card>
     </div>
   );

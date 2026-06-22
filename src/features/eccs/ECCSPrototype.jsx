@@ -5,6 +5,7 @@ import { C } from "./lib/brand";
 import { createInitialState, crmReducer, getClientBundle, PIPELINE_LABELS } from "./lib/crm";
 import { FontLoad } from "./components/ui";
 import TopSwitcher from "./components/TopSwitcher";
+import ManualOverride from "./components/ManualOverride";
 import AdminApp from "./admin/AdminApp";
 import ClientApp from "./client/ClientApp";
 
@@ -22,6 +23,7 @@ function initState() {
 
 export default function ECCSPrototype() {
   const [app, setApp] = useState("admin");
+  const [overrideOpen, setOverrideOpen] = useState(false);
   const [state, dispatch] = useReducer(crmReducer, undefined, initState);
 
   useEffect(() => {
@@ -62,6 +64,10 @@ export default function ECCSPrototype() {
       sendCalendarInvite: (clientId) => dispatch({ type: "send_calendar_invite", clientId }),
       updatePortal: (clientId, patch) => dispatch({ type: "update_portal", clientId, patch }),
       sendMessage: (clientId, text, from = "studio") => dispatch({ type: "send_message", clientId, text, from }),
+      forceStage: (clientId, stageKey) => dispatch({ type: "force_stage", clientId, stageKey }),
+      markLost: (clientId) => dispatch({ type: "mark_lost", clientId }),
+      markArchived: (clientId) => dispatch({ type: "mark_archived", clientId }),
+      deliverGallery: (clientId) => dispatch({ type: "deliver_gallery", clientId }),
       resetDemo: () => window.localStorage.removeItem(STORAGE_KEY),
     }),
     [],
@@ -81,6 +87,8 @@ export default function ECCSPrototype() {
       ) : (
         <ClientApp state={state} selectedBundle={selectedBundle} actions={actions} setApp={setApp} />
       )}
+
+      <ManualOverride open={overrideOpen} setOpen={setOverrideOpen} selectedBundle={selectedBundle} actions={actions} />
     </div>
   );
 }
