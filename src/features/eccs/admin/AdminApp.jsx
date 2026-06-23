@@ -36,6 +36,7 @@ import {
   UserCog,
   Users,
   Workflow,
+  Trash2,
   X,
 } from "lucide-react";
 import { C } from "../lib/brand";
@@ -897,6 +898,27 @@ function DashboardPage({ state, selectedBundle, filteredClients, actions, setPag
   );
 }
 
+function BookingChecklistCard({ selectedBundle, setPage }) {
+  const steps = selectedBundle.booking?.steps || {};
+  const items = BOOKING_STEPS.map((step) => ({ ...step, done: Boolean(steps[step.key]) }));
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between px-5 pb-3">
+        <SectionLabel icon={CheckCircle2}>Booking Checklist</SectionLabel>
+        <Pill tone={selectedBundle.booking?.isBooked ? "done" : "warn"}>{selectedBundle.booking?.completionCount || 0}/{BOOKING_STEPS.length}</Pill>
+      </div>
+      <div className="px-5 pb-5 space-y-2">
+        {items.map((item) => (
+          <button key={item.key} onClick={() => setPage(item.key === "quoteAccepted" ? "quotes" : item.key === "contractSigned" ? "contracts" : "invoices")} className="w-full flex items-center gap-3 rounded-2xl px-3 py-2 text-left" style={{ background: item.done ? "#eaf1ee" : C.bg, border: `1px solid ${C.line}` }}>
+            <StatusLight tone={item.done ? "done" : "warn"} />
+            <span className="text-sm" style={{ color: C.ink }}>{item.label}</span>
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 function RevenueCard({ state, setPage }) {
   const collected = state.invoices.reduce((sum, entry) => sum + entry.amountPaid, 0);
   const buckets = [
@@ -1736,6 +1758,7 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
   const inquiryPackage = getInquiryPackage(selectedBundle.inquiry, state.packages);
   const quotePackage = getQuoteSelectedPackage(quote, state.packages);
   const sourcePackage = inquiryPackage || quotePackage;
+  const quoteLocked = Boolean(quote && (quote.locked || ["sent", "viewed", "accepted", "declined"].includes(quote.status)));
 
   if (!selectedBundle.client) {
     return <QuotesDashboard state={state} actions={actions} />;
@@ -1765,13 +1788,31 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Pill tone={statusTone(quote.status)}>{quote.status}</Pill>
+              {quoteLocked && <Pill tone="warn">locked</Pill>}
+              {quoteLocked && quote.status !== "accepted" && quote.status !== "declined" && (
+                <button onClick={() => actions.patchQuote(quote.id, { locked: false })} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: C.cream, color: C.ink }}>
+                  Unlock edit
+                </button>
+              )}
               <button onClick={() => setPreviewOpen(true)} className="px-3 py-2 rounded-full text-xs font-medium flex items-center gap-1.5" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
-                <Eye size={13} /> Preview
+                <Eye size={13} /> {quoteLocked ? "View sent quote" : "Preview"}
+              </button>
+              <button onClick={() => window.confirm(`Delete ${quote.number}?`) && actions.deleteQuote(quote.id)} className="px-3 py-2 rounded-full text-xs font-medium flex items-center gap-1.5" style={{ border: `1px solid ${C.line}`, color: C.red }}>
+                <Trash2 size={13} /> Delete
               </button>
             </div>
           </div>
           <p className="ecc-display text-2xl mt-4" style={{ color: C.ink }}>{formatCurrency(quote.total)}</p>
 
+          {quoteLocked ? (
+            <LockedDocumentPreview
+              title="Quote is in preview mode"
+              body="This quote has been sent or completed, so editing is locked. Use Unlock edit when you need to correct a sent quote. Accepted and declined quotes stay as records."
+            >
+              <QuotePreviewBody quote={quote} selectedBundle={selectedBundle} actions={actions} />
+            </LockedDocumentPreview>
+          ) : (
+            <>
           <div className="rounded-3xl p-4 mt-5" style={{ background: C.bg }}>
             <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
               <div>
@@ -1895,36 +1936,93 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
               </button>
             )}
           </div>
+            </>
+          )}
         </Card>
       )}
 
       {previewOpen && quote && (
         <Modal onClose={() => setPreviewOpen(false)} title="Quote Preview">
-          <p className="text-[10px] uppercase tracking-[0.3em]" style={{ color: C.taupe }}>{selectedBundle.client?.name}</p>
-          <p className="ecc-display text-4xl mt-2" style={{ color: C.ink }}>{quote.number}</p>
-          <p className="text-sm mt-2" style={{ color: C.charcoal }}>{quote.eventType}</p>
-          <div className="mt-6 space-y-3">
-            {(quote.optionGroups || []).map((group) => <QuoteOptionGroupPreview key={group.id} group={group} quote={quote} actions={actions} readOnly />)}
-            {quote.lineItems.map((item) => (
-              <div key={item.id} className="flex items-start justify-between gap-3 pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
-                <div>
-                  <p className="text-sm font-medium" style={{ color: C.ink }}>{item.name} {item.optional && <span className="text-xs" style={{ color: C.taupe }}>(optional)</span>}</p>
-                  <RichText text={item.description} className="text-xs mt-1" style={{ color: C.charcoal }} />
-                </div>
-                <p className="text-sm shrink-0" style={{ color: C.ink }}>{formatCurrency(item.quantity * item.unitPrice)}</p>
-              </div>
-            ))}
-          </div>
-          <div className="space-y-2 mt-6 text-sm">
-            <PriceRow label="Subtotal" value={formatCurrency(quote.subtotal)} />
-            {quote.discount > 0 && <PriceRow label="Discount" value={formatCurrency(quote.discount)} />}
-            <PriceRow label="Tax" value={formatCurrency(quote.tax)} />
-            <PriceRow strong label="Total" value={formatCurrency(quote.total)} />
-          </div>
+          <QuotePreviewBody quote={quote} selectedBundle={selectedBundle} actions={actions} />
         </Modal>
       )}
       {emailModal}
     </div>
+  );
+}
+
+
+function LockedDocumentPreview({ title, body, children }) {
+  return (
+    <div className="rounded-3xl p-4 mt-5" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+      <div className="rounded-2xl p-4 mb-4" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+        <div className="flex items-start gap-3">
+          <Eye size={18} color={C.forest} />
+          <div>
+            <p className="text-sm font-medium" style={{ color: C.ink }}>{title}</p>
+            <p className="text-xs mt-1 leading-5" style={{ color: C.charcoal }}>{body}</p>
+          </div>
+        </div>
+      </div>
+      <div className="rounded-3xl p-5" style={{ background: "#fff" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function QuotePreviewBody({ quote, selectedBundle, actions }) {
+  return (
+    <>
+      <p className="text-[10px] uppercase tracking-[0.3em]" style={{ color: C.taupe }}>{selectedBundle.client?.name}</p>
+      <p className="ecc-display text-4xl mt-2" style={{ color: C.ink }}>{quote.number}</p>
+      <p className="text-sm mt-2" style={{ color: C.charcoal }}>{quote.eventType}</p>
+      <div className="mt-6 space-y-3">
+        {(quote.optionGroups || []).map((group) => <QuoteOptionGroupPreview key={group.id} group={group} quote={quote} actions={actions} readOnly />)}
+        {quote.lineItems.map((item) => (
+          <div key={item.id} className="flex items-start justify-between gap-3 pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: C.ink }}>{item.name} {item.optional && <span className="text-xs" style={{ color: C.taupe }}>(optional)</span>}</p>
+              <RichText text={item.description} className="text-xs mt-1" style={{ color: C.charcoal }} />
+            </div>
+            <p className="text-sm shrink-0" style={{ color: C.ink }}>{formatCurrency(item.quantity * item.unitPrice)}</p>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-2 mt-6 text-sm">
+        <PriceRow label="Subtotal" value={formatCurrency(quote.subtotal)} />
+        {quote.discount > 0 && <PriceRow label="Discount" value={formatCurrency(quote.discount)} />}
+        <PriceRow label="Tax" value={formatCurrency(quote.tax)} />
+        <PriceRow strong label="Total" value={formatCurrency(quote.total)} />
+      </div>
+    </>
+  );
+}
+
+function InvoicePreviewBody({ invoice, selectedBundle }) {
+  return (
+    <>
+      <p className="text-[10px] uppercase tracking-[0.3em]" style={{ color: C.taupe }}>{selectedBundle.client?.name}</p>
+      <p className="ecc-display text-4xl mt-2" style={{ color: C.ink }}>{invoice.number}</p>
+      <p className="text-sm mt-2" style={{ color: C.charcoal }}>{invoice.kind} invoice · Due {invoice.dueDate || "TBD"}</p>
+      <div className="mt-6 space-y-3">
+        {invoice.lineItems.map((item) => (
+          <div key={item.id} className="flex items-start justify-between gap-3 pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: C.ink }}>{item.name}</p>
+              <RichText text={item.description} className="text-xs mt-1" style={{ color: C.charcoal }} />
+            </div>
+            <p className="text-sm shrink-0" style={{ color: C.ink }}>{formatCurrency(item.quantity * item.unitPrice)}</p>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-2 mt-6 text-sm">
+        <PriceRow label="Subtotal" value={formatCurrency(invoice.subtotal)} />
+        <PriceRow label="Tax" value={formatCurrency(invoice.tax)} />
+        <PriceRow strong label="Total" value={formatCurrency(invoice.total)} />
+        <PriceRow strong label="Balance Due" value={formatCurrency(invoice.balanceDue)} />
+      </div>
+    </>
   );
 }
 
@@ -2401,6 +2499,9 @@ function ContractsPage({ state, selectedBundle, actions, setPage }) {
                   {selectedBundle.primaryInvoice ? "View invoice" : "Create invoice"} <ChevronRight size={12} />
                 </button>
               )}
+              <button onClick={() => window.confirm(`Delete ${contract.number}?`) && actions.deleteContract(contract.id)} className="px-3 py-2 rounded-full text-xs font-medium flex items-center gap-1" style={{ background: "#fff", color: C.red, border: `1px solid ${C.line}` }}>
+                <Trash2 size={13} /> Delete
+              </button>
             </div>
           </div>
         )}
@@ -2606,7 +2707,10 @@ function InvoicesPage({ state, selectedBundle, actions, setPage }) {
               {invoiceLocked && <Pill tone="warn">locked</Pill>}
               {invoice?.locked && invoice.status !== "paid" && <button onClick={() => actions.patchInvoice(invoice.id, { locked: false })} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: C.cream, color: C.ink }}>Unlock edit</button>}
               <button onClick={() => setPreviewOpen(true)} className="px-3 py-2 rounded-full text-xs font-medium flex items-center gap-1.5" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
-                <Eye size={13} /> Preview
+                <Eye size={13} /> {invoiceLocked ? "View sent invoice" : "Preview"}
+              </button>
+              <button onClick={() => window.confirm(`Delete ${invoice.number}?`) && actions.deleteInvoice(invoice.id)} className="px-3 py-2 rounded-full text-xs font-medium flex items-center gap-1.5" style={{ border: `1px solid ${C.line}`, color: C.red }}>
+                <Trash2 size={13} /> Delete
               </button>
             </div>
           </div>
@@ -2619,10 +2723,19 @@ function InvoicesPage({ state, selectedBundle, actions, setPage }) {
             <SummaryChip label="Balance" value={formatCurrency(invoice.balanceDue)} />
             <div>
               <p className="text-[10px] uppercase tracking-[0.25em] mb-1" style={{ color: C.taupe }}>Due date</p>
-              <input type="date" value={toInputDate(invoice.dueDate)} onChange={(event) => actions.patchInvoice(invoice.id, { dueDate: fromInputDate(event.target.value) })} className="w-full rounded-2xl px-3 py-2.5 text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink, background: "#fff" }} />
+              <input disabled={invoiceLocked} type="date" value={toInputDate(invoice.dueDate)} onChange={(event) => actions.patchInvoice(invoice.id, { dueDate: fromInputDate(event.target.value) })} className="w-full rounded-2xl px-3 py-2.5 text-sm disabled:opacity-60" style={{ border: `1px solid ${C.line}`, color: C.ink, background: "#fff" }} />
             </div>
           </div>
 
+          {invoiceLocked ? (
+            <LockedDocumentPreview
+              title="Invoice is in preview mode"
+              body="Sent invoices are locked so the amount the client received does not silently change. Unlock edit if you need to correct an unpaid invoice. Paid invoices stay locked."
+            >
+              <InvoicePreviewBody invoice={invoice} selectedBundle={selectedBundle} />
+            </LockedDocumentPreview>
+          ) : (
+            <>
           <div className="flex items-center justify-between mb-3">
             <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Line Items</p>
           </div>
@@ -2650,6 +2763,8 @@ function InvoicesPage({ state, selectedBundle, actions, setPage }) {
             {invoice.kind === "final" && <CatalogPicker label="+ Rush delivery" options={state.addons.filter((addon) => addon.name.toLowerCase().includes("rush"))} onPick={(addon) => actions.addInvoiceCatalogItem(invoice.id, { name: addon.name, description: addon.description, unitPrice: addon.price })} />}
             <span className="text-xs" style={{ color: C.taupe }}>Packages add as a new item below — edit the price to match what was actually billed.</span>
           </div>
+            </>
+          )}
 
           <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Send &amp; Collect</p>
           <div className="flex flex-wrap items-center gap-2 mb-6">
@@ -3509,30 +3624,50 @@ function PlaceholderPage({ title, body }) {
 const TIME_PRESETS = ["9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM", "4:30 PM", "5:00 PM"];
 
 function CalendarPage({ state, selectedBundle, actions, setPage }) {
-  const [selected, setSelected] = useState(22);
-  const [view, setView] = useState("month");
+  const TODAY_DAY = 22;
+  const [selected, setSelected] = useState(TODAY_DAY);
+  const [view, setView] = useState("today");
   const [editingAvailability, setEditingAvailability] = useState(false);
   const [customTime, setCustomTime] = useState("");
   const days = Array.from({ length: 30 }, (_, index) => index + 1);
   const dateLabel = (day) => `Jul ${day}, 2026`;
+  const extractDay = (value = "") => {
+    const july = String(value).match(/Jul\s+(\d{1,2})/i);
+    if (july) return Number(july[1]);
+    const iso = String(value).match(/2026-07-(\d{2})/);
+    if (iso) return Number(iso[1]);
+    const match = String(value).match(/\b(\d{1,2})\b/);
+    return match ? Number(match[1]) : null;
+  };
+  const timeSort = (value = "") => {
+    const match = String(value).match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+    if (!match) return 9999;
+    let hour = Number(match[1]);
+    const minute = Number(match[2] || 0);
+    const meridian = (match[3] || "").toUpperCase();
+    if (meridian === "PM" && hour !== 12) hour += 12;
+    if (meridian === "AM" && hour === 12) hour = 0;
+    return hour * 60 + minute;
+  };
 
   const eventsByDay = useMemo(() => {
     const map = {};
     state.sessions
       .filter((session) => session.sessionDate)
       .forEach((session) => {
-        const day = Number((session.sessionDate.match(/\d{1,2}/) || [])[0]);
+        const day = extractDay(session.sessionDate);
         if (!day) return;
         const bundle = getClientBundle(state, session.clientId);
         map[day] = map[day] || [];
         map[day].push({
           title: `${bundle.client?.sessionType || "Session"} — ${bundle.client?.name || "Client"}`,
-          time: session.sessionTime,
+          time: session.sessionTime || "Time TBD",
           clientId: session.clientId,
           status: session.status,
-          location: bundle.client?.city,
+          location: session.location || bundle.client?.city || "Location TBD",
         });
       });
+    Object.keys(map).forEach((day) => map[day].sort((a, b) => timeSort(a.time) - timeSort(b.time)));
     return map;
   }, [state]);
 
@@ -3540,12 +3675,14 @@ function CalendarPage({ state, selectedBundle, actions, setPage }) {
     return state.sessions
       .filter((session) => session.sessionDate)
       .map((session) => ({ session, bundle: getClientBundle(state, session.clientId) }))
-      .sort((a, b) => String(a.session.sessionDate).localeCompare(String(b.session.sessionDate)));
+      .sort((a, b) => String(a.session.sessionDate).localeCompare(String(b.session.sessionDate)) || timeSort(a.session.sessionTime) - timeSort(b.session.sessionTime));
   }, [state]);
 
+  const slotsForDay = (day) => (state.availability.find((entry) => entry.date === dateLabel(day))?.times || []).slice().sort((a, b) => timeSort(a) - timeSort(b));
   const dayEvents = eventsByDay[selected] || [];
-  const slotsForDay = state.availability.find((entry) => entry.date === dateLabel(selected))?.times || [];
-  const weekDays = Array.from({ length: 7 }, (_, index) => selected - 3 + index).filter((day) => day >= 1 && day <= 30);
+  const openSlots = slotsForDay(selected);
+  const weekStart = Math.max(1, Math.min(24, selected - ((selected - 1) % 7)));
+  const weekDays = Array.from({ length: 7 }, (_, index) => weekStart + index).filter((day) => day >= 1 && day <= 30);
 
   const addCustomSlot = () => {
     if (!customTime.trim()) return;
@@ -3553,26 +3690,52 @@ function CalendarPage({ state, selectedBundle, actions, setPage }) {
     setCustomTime("");
   };
 
+  const goToday = () => {
+    setSelected(TODAY_DAY);
+    setView("today");
+  };
+
+  const DayAgenda = ({ day, compact = false }) => {
+    const events = eventsByDay[day] || [];
+    const slots = slotsForDay(day);
+    const combined = [
+      ...events.map((event) => ({ ...event, kind: "booked", sort: timeSort(event.time) })),
+      ...slots.map((time) => ({ kind: "open", time, title: "Open slot", sort: timeSort(time) })),
+    ].sort((a, b) => a.sort - b.sort);
+    if (combined.length === 0) return <p className="text-xs" style={{ color: C.taupe }}>No events or open slots.</p>;
+    return (
+      <div className="space-y-2">
+        {combined.map((item, index) => (
+          item.kind === "booked" ? (
+            <button key={`${item.kind}-${index}`} onClick={() => { actions.selectClient(item.clientId); setPage("sessions"); }} className="w-full text-left rounded-2xl px-3 py-2 flex gap-3" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+              <div className="w-14 shrink-0 text-xs font-medium" style={{ color: C.forest }}>{item.time}</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm truncate" style={{ color: C.ink }}>{item.title}</p>
+                {!compact && <p className="text-xs mt-0.5 truncate" style={{ color: C.taupe }}>{item.location}</p>}
+              </div>
+            </button>
+          ) : (
+            <div key={`${item.kind}-${index}`} className="rounded-2xl px-3 py-2 flex gap-3" style={{ background: C.bg, border: `1px dashed ${C.line}` }}>
+              <div className="w-14 shrink-0 text-xs font-medium" style={{ color: C.taupe }}>{item.time}</div>
+              <p className="text-sm" style={{ color: C.charcoal }}>Open slot</p>
+            </div>
+          )
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4">
       <Card className="p-3 flex flex-wrap items-center gap-2">
-        <button onClick={() => setSelected(22)} className="px-3 py-1.5 rounded-full text-xs font-medium" style={{ background: C.cream, color: C.forest }}>Today</button>
+        <button onClick={goToday} className="px-3 py-1.5 rounded-full text-xs font-medium" style={{ background: view === "today" ? C.forest : C.cream, color: view === "today" ? "#fff" : C.forest }}>Today</button>
         {["week", "month", "list"].map((key) => (
-          <button
-            key={key}
-            onClick={() => setView(key)}
-            className="px-3 py-1.5 rounded-full text-xs font-medium capitalize"
-            style={{ background: view === key ? C.charcoal : C.bg, color: view === key ? "#fff" : C.charcoal }}
-          >
+          <button key={key} onClick={() => setView(key)} className="px-3 py-1.5 rounded-full text-xs font-medium capitalize" style={{ background: view === key ? C.charcoal : C.bg, color: view === key ? "#fff" : C.charcoal }}>
             {key}
           </button>
         ))}
         <div className="flex-1" />
-        <button
-          onClick={() => setEditingAvailability((value) => !value)}
-          className="px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5"
-          style={{ background: editingAvailability ? C.forest : C.cream, color: editingAvailability ? "#fff" : C.ink }}
-        >
+        <button onClick={() => setEditingAvailability((value) => !value)} className="px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5" style={{ background: editingAvailability ? C.forest : C.cream, color: editingAvailability ? "#fff" : C.ink }}>
           <CalendarDays size={13} /> {editingAvailability ? "Done editing availability" : "Edit Availability"}
         </button>
         <p className="text-[11px]" style={{ color: C.taupe }}>Last edited: {state.availabilityLastEditedAt || "Not yet"}</p>
@@ -3584,72 +3747,62 @@ function CalendarPage({ state, selectedBundle, actions, setPage }) {
           <div className="px-5 pb-5">
             {upcoming.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>Nothing scheduled yet.</p>}
             {upcoming.map(({ session, bundle }, index) => (
-              <button
-                key={session.id}
-                onClick={() => { actions.selectClient(session.clientId); setPage("sessions"); }}
-                className="w-full text-left flex flex-wrap items-center justify-between gap-2 py-3"
-                style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}` }}
-              >
+              <button key={session.id} onClick={() => { actions.selectClient(session.clientId); setPage("sessions"); }} className="w-full text-left flex flex-wrap items-center justify-between gap-2 py-3" style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}` }}>
                 <div className="flex items-center gap-3">
                   <Avatar name={bundle.client?.name || "?"} />
                   <div>
                     <p className="text-sm font-medium" style={{ color: C.ink }}>{bundle.client?.name} — {bundle.client?.sessionType}</p>
-                    <p className="text-xs mt-0.5" style={{ color: C.charcoal }}>{session.sessionDate} · {session.sessionTime || "TBD"} · {bundle.client?.city || "Location TBD"}</p>
+                    <p className="text-xs mt-0.5" style={{ color: C.charcoal }}>{session.sessionDate} · {session.sessionTime || "TBD"} · {session.location || bundle.client?.city || "Location TBD"}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Pill tone={statusTone(session.status)}>{session.status}</Pill>
-                  <ChevronRight size={14} color={C.taupe} />
-                </div>
+                <div className="flex items-center gap-2"><Pill tone={statusTone(session.status)}>{session.status}</Pill><ChevronRight size={14} color={C.taupe} /></div>
               </button>
             ))}
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5">
           <Card className="p-5">
-            <div className="flex items-center justify-between mb-1">
-              <button className="text-xs font-medium px-3 py-1.5 rounded-full" style={{ background: C.cream, color: C.forest }} onClick={() => setSelected(22)}>Today</button>
-              <p className="ecc-display text-2xl" style={{ color: C.ink }}>July 2026</p>
+            <div className="flex items-center justify-between mb-4">
+              <button className="text-xs font-medium px-3 py-1.5 rounded-full" style={{ background: C.cream, color: C.forest }} onClick={goToday}>Today</button>
+              <p className="ecc-display text-2xl" style={{ color: C.ink }}>{view === "week" ? `Week of ${dateLabel(weekStart)}` : view === "today" ? dateLabel(TODAY_DAY) : "July 2026"}</p>
               <div className="flex gap-3"><ChevronLeft size={18} color={C.charcoal} /><ChevronRight size={18} color={C.charcoal} /></div>
             </div>
 
-            {view === "week" ? (
-              <div className="grid grid-cols-7 gap-2 mt-4">
+            {view === "today" ? (
+              <div className="rounded-3xl p-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+                <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Today calendar</p>
+                <DayAgenda day={TODAY_DAY} />
+              </div>
+            ) : view === "week" ? (
+              <div className="grid grid-cols-1 md:grid-cols-7 gap-2 mt-2">
                 {weekDays.map((day) => {
-                  const has = eventsByDay[day];
-                  const slots = state.availability.find((entry) => entry.date === dateLabel(day))?.times.length || 0;
                   const isSelected = day === selected;
                   return (
-                    <button key={day} onClick={() => setSelected(day)} className="rounded-xl p-3 text-center" style={{ background: isSelected ? C.forest : C.bg, color: isSelected ? "#fff" : C.ink }}>
-                      <p className="text-lg ecc-display">{day}</p>
-                      {has && <p className="text-[10px] mt-1" style={{ color: isSelected ? C.cream : C.forest }}>{has.length} booked</p>}
-                      {slots > 0 && <p className="text-[10px] mt-0.5" style={{ color: isSelected ? C.cream : C.taupe }}>{slots} open</p>}
-                    </button>
+                    <div key={day} className="rounded-2xl p-3 min-h-[220px]" style={{ background: isSelected ? C.cream : C.bg, border: `1px solid ${isSelected ? C.forest : C.line}` }}>
+                      <button onClick={() => setSelected(day)} className="w-full text-left mb-3">
+                        <p className="ecc-display text-xl" style={{ color: C.ink }}>{day}</p>
+                        <p className="text-[10px]" style={{ color: C.taupe }}>{(eventsByDay[day] || []).length} booked · {slotsForDay(day).length} open</p>
+                      </button>
+                      <DayAgenda day={day} compact />
+                    </div>
                   );
                 })}
               </div>
             ) : (
               <div className="w-full">
                 <div className="grid grid-cols-7 gap-1 text-xs mt-4 mb-1">
-                  {["S", "M", "T", "W", "T", "F", "S"].map((label, index) => (
-                    <div key={index} className="text-center font-medium pb-1" style={{ color: C.taupe }}>{label}</div>
-                  ))}
+                  {["S", "M", "T", "W", "T", "F", "S"].map((label, index) => <div key={index} className="text-center font-medium pb-1" style={{ color: C.taupe }}>{label}</div>)}
                 </div>
                 <div className="grid grid-cols-7 gap-1">
                   {days.map((day) => {
                     const has = eventsByDay[day];
-                    const slots = state.availability.find((entry) => entry.date === dateLabel(day))?.times.length || 0;
+                    const slots = slotsForDay(day).length;
                     const isSelected = day === selected;
                     return (
-                      <button
-                        key={day}
-                        onClick={() => setSelected(day)}
-                        className="min-h-24 rounded-2xl p-2 text-left text-sm relative"
-                        style={{ background: isSelected ? C.forest : has ? C.cream : slots > 0 ? "#eef0e3" : "#fff", color: isSelected ? "#fff" : C.ink, border: `1px solid ${C.line}` }}
-                      >
+                      <button key={day} onClick={() => setSelected(day)} className="min-h-24 rounded-2xl p-2 text-left text-sm relative" style={{ background: isSelected ? C.forest : has ? C.cream : slots > 0 ? "#eef0e3" : "#fff", color: isSelected ? "#fff" : C.ink, border: `1px solid ${C.line}` }}>
                         <p className="font-medium">{day}</p>
-                        {has && has.slice(0,2).map((event, index) => <p key={index} className="text-[10px] mt-1 truncate" style={{ color: isSelected ? C.cream : C.forest }}>{event.title}</p>)}
+                        {has && has.slice(0, 2).map((event, index) => <p key={index} className="text-[10px] mt-1 truncate" style={{ color: isSelected ? C.cream : C.forest }}>{event.time} · {event.title}</p>)}
                         {slots > 0 && <p className="text-[10px] mt-1" style={{ color: isSelected ? C.cream : C.taupe }}>{slots} open slot{slots === 1 ? "" : "s"}</p>}
                       </button>
                     );
@@ -3661,13 +3814,12 @@ function CalendarPage({ state, selectedBundle, actions, setPage }) {
 
           <Card className="p-5 lg:self-start">
             <p className="text-xs uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>{dateLabel(selected)}</p>
-
             {editingAvailability ? (
               <>
                 <p className="text-xs mb-3" style={{ color: C.charcoal }}>These times become selectable for clients on the date-selection email.</p>
                 <div className="space-y-1.5 mb-3">
-                  {slotsForDay.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>No availability set for this date.</p>}
-                  {slotsForDay.map((time) => (
+                  {openSlots.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>No availability set for this date.</p>}
+                  {openSlots.map((time) => (
                     <div key={time} className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ background: C.bg }}>
                       <span className="text-sm" style={{ color: C.ink }}>{time}</span>
                       <button onClick={() => actions.removeAvailabilitySlot(dateLabel(selected), time)}><X size={14} color={C.red} /></button>
@@ -3675,11 +3827,7 @@ function CalendarPage({ state, selectedBundle, actions, setPage }) {
                   ))}
                 </div>
                 <div className="flex flex-wrap gap-1.5 mb-3">
-                  {TIME_PRESETS.filter((time) => !slotsForDay.includes(time)).map((time) => (
-                    <button key={time} onClick={() => actions.addAvailabilitySlot(dateLabel(selected), time)} className="text-xs px-2.5 py-1.5 rounded-full" style={{ border: `1px solid ${C.line}`, color: C.charcoal }}>
-                      + {time}
-                    </button>
-                  ))}
+                  {TIME_PRESETS.filter((time) => !openSlots.includes(time)).map((time) => <button key={time} onClick={() => actions.addAvailabilitySlot(dateLabel(selected), time)} className="text-xs px-2.5 py-1.5 rounded-full" style={{ border: `1px solid ${C.line}`, color: C.charcoal }}>+ {time}</button>)}
                 </div>
                 <div className="flex gap-2">
                   <input value={customTime} onChange={(event) => setCustomTime(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addCustomSlot()} placeholder="Custom time, e.g. 6:00 PM" className="flex-1 px-3 py-2 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
@@ -3688,34 +3836,8 @@ function CalendarPage({ state, selectedBundle, actions, setPage }) {
               </>
             ) : (
               <>
-                {dayEvents.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>Nothing scheduled.</p>}
-                {dayEvents.map((event, index) => (
-                  <button
-                    key={index}
-                    onClick={() => { actions.selectClient(event.clientId); setPage("sessions"); }}
-                    className="w-full text-left flex items-center gap-3 py-2.5"
-                    style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}` }}
-                  >
-                    <div className="w-1 self-stretch rounded-full" style={{ background: C.forest }} />
-                    <div className="flex-1">
-                      <p className="text-sm" style={{ color: C.forest }}>{event.title}</p>
-                      <p className="text-xs" style={{ color: C.taupe }}>{event.time || "Time TBD"}</p>
-                    </div>
-                  </button>
-                ))}
-                {slotsForDay.length > 0 && (
-                  <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
-                    <p className="text-[10px] uppercase tracking-[0.25em] mb-2" style={{ color: C.taupe }}>Open slots</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {slotsForDay.map((time) => <Pill key={time} tone="info">{time}</Pill>)}
-                    </div>
-                  </div>
-                )}
-                {selectedBundle.session?.sessionDate && (
-                  <p className="text-[11px] mt-3" style={{ color: C.taupe }}>
-                    Selected client's session: {selectedBundle.session.sessionDate} at {selectedBundle.session.sessionTime || "TBD"}.
-                  </p>
-                )}
+                <DayAgenda day={selected} />
+                {selectedBundle.session?.sessionDate && <p className="text-[11px] mt-3" style={{ color: C.taupe }}>Selected client's session: {selectedBundle.session.sessionDate} at {selectedBundle.session.sessionTime || "TBD"}.</p>}
               </>
             )}
           </Card>
@@ -4351,196 +4473,139 @@ function TemplatesPage() {
 }
 
 function SettingsPage({ state, actions }) {
+  const [active, setActive] = useState("email");
   const [locationDraft, setLocationDraft] = useState({ name: "", city: "Miami, FL", address: "" });
-  const mergeFields = ["{{client_name}}", "{{session_type}}", "{{quote_total}}", "{{quote_number}}", "{{invoice_number}}", "{{invoice_total}}", "{{contract_title}}", "{{portal_link}}", "{{session_date}}", "{{session_time}}", "{{location}}", "{{business_name}}", "{{gallery_link}}", "{{print_store_link}}"];
+  const mergeFields = ["{{client_name}}", "{{session_type}}", "{{quote_total}}", "{{quote_number}}", "{{invoice_number}}", "{{invoice_total}}", "{{contract_title}}", "{{portal_link}}", "{{session_date}}", "{{session_time}}", "{{location}}", "{{business_name}}", "{{gallery_link}}", "{{print_store_link}}"]; 
   const emailTemplates = state.emailTemplates || [];
+  const tabs = [
+    { key: "email", label: "Email", icon: Mail },
+    { key: "locations", label: "Locations", icon: CalendarDays },
+    { key: "templates", label: "Templates", icon: LayoutTemplate },
+    { key: "portal", label: "Portal", icon: CheckCircle2 },
+  ];
   const addLocation = () => {
     if (!locationDraft.name.trim()) return;
     actions.addLocation(locationDraft);
     setLocationDraft({ name: "", city: "Miami, FL", address: "" });
   };
+
   return (
     <div className="space-y-5">
       <Card className="p-5">
-        <SectionLabel icon={SettingsIcon}>Settings</SectionLabel>
-        <p className="text-sm px-5 pb-4" style={{ color: C.charcoal }}>Global CRM configuration lives here instead of scattered across quote, contract, portal, and calendar screens.</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 px-5 pb-5">
-          {["Email Templates", "Locations", "Calendar Connections", "Quote Templates", "Contract Templates", "Add-ons", "Portal Defaults"].map((label) => (
-            <div key={label} className="rounded-2xl p-4" style={{ background: C.bg }}>
-              <p className="text-sm font-medium" style={{ color: C.ink }}>{label}</p>
-              <p className="text-xs mt-1" style={{ color: C.taupe }}>Editable global defaults</p>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <Card className="p-5">
-        <SectionLabel icon={Mail}>Email Templates</SectionLabel>
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4 px-5 pb-5">
-          <div className="space-y-2">
-            {emailTemplates.map((template) => (
-              <div key={template.key} className="rounded-2xl p-4" style={{ border: `1px solid ${C.line}` }}>
-                <p className="text-sm font-medium" style={{ color: C.ink }}>{template.name}</p>
-                <Field label="Subject" value={template.subject || ""} onChange={(value) => actions.updateEmailTemplate(template.key, { subject: value })} />
-                <textarea rows={4} value={template.body || ""} onChange={(event) => actions.updateEmailTemplate(template.key, { body: event.target.value })} className="mt-2 w-full rounded-xl p-3 text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
-              </div>
-            ))}
-          </div>
-          <div className="rounded-2xl p-4 h-fit" style={{ background: C.bg }}>
-            <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Available merge fields</p>
-            <div className="flex flex-wrap gap-2">
-              {mergeFields.map((field) => <Pill key={field} tone="info">{field}</Pill>)}
-            </div>
-            <p className="text-xs mt-4" style={{ color: C.charcoal }}>Preview modals should render these fields before sending. This page is the editable source.</p>
+        <div className="flex flex-wrap items-start justify-between gap-3 px-5 pb-4">
+          <div>
+            <SectionLabel icon={SettingsIcon}>Settings</SectionLabel>
+            <p className="text-sm max-w-2xl" style={{ color: C.charcoal }}>Global defaults only. The messy setup cards were collapsed into tabs so this page feels like a control panel, not a junk drawer.</p>
           </div>
         </div>
-      </Card>
-
-      <Card className="p-5">
-        <SectionLabel icon={CalendarDays}>Locations & Calendar</SectionLabel>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 px-5 pb-5">
-          <div className="rounded-2xl p-4" style={{ background: C.bg }}>
-            <p className="text-sm font-medium mb-3" style={{ color: C.ink }}>Saved locations / studios</p>
-            {(state.locations || []).map((location) => (
-              <div key={location.id} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 py-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                <Field compact value={location.name} onChange={(value) => actions.updateLocation(location.id, { name: value })} />
-                <Field compact value={location.address || location.city || ""} onChange={(value) => actions.updateLocation(location.id, { address: value })} />
-                <button onClick={() => actions.removeLocation(location.id)} className="text-xs" style={{ color: C.red }}>Remove</button>
-              </div>
-            ))}
-            <div className="mt-3 grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2">
-              <Field compact value={locationDraft.name} onChange={(value) => setLocationDraft((draft) => ({ ...draft, name: value }))} />
-              <Field compact value={locationDraft.address} onChange={(value) => setLocationDraft((draft) => ({ ...draft, address: value }))} />
-              <button onClick={addLocation} className="px-3 py-2 rounded-xl text-xs font-medium text-white" style={{ background: C.forest }}>Add</button>
-            </div>
-          </div>
-          <div className="rounded-2xl p-4" style={{ background: C.bg }}>
-            <p className="text-sm font-medium mb-3" style={{ color: C.ink }}>Calendar connections</p>
-            {[['google', 'Google Calendar'], ['apple', 'Apple Calendar']].map(([key, label]) => (
-              <button key={key} onClick={() => actions.updateCalendarConnection(key, !state.calendarConnections?.[key])} className="w-full text-left px-4 py-3 rounded-xl mb-2 flex items-center justify-between" style={{ background: "#fff", border: `1px solid ${C.line}`, color: C.ink }}>
-                <span>{state.calendarConnections?.[key] ? 'Connected' : 'Connect'} {label}</span>
-                <Pill tone={state.calendarConnections?.[key] ? "done" : "neutral"}>{state.calendarConnections?.[key] ? "on" : "future"}</Pill>
+        <div className="flex gap-2 overflow-x-auto px-5 pb-1 ecc-scrollbar">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button key={tab.key} onClick={() => setActive(tab.key)} className="px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 shrink-0" style={{ background: active === tab.key ? C.charcoal : C.bg, color: active === tab.key ? "#fff" : C.charcoal }}>
+                <Icon size={14} /> {tab.label}
               </button>
-            ))}
-            <p className="text-xs mt-3" style={{ color: C.charcoal }}>These are frontend connection switches for now. Backend OAuth comes during Supabase/Auth implementation.</p>
-          </div>
+            );
+          })}
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card className="p-5">
-          <SectionLabel icon={LayoutTemplate}>Quote Templates</SectionLabel>
-          <div className="px-5 pb-5 flex flex-wrap gap-2">
-            {(state.quoteTemplates || []).map((name) => <Pill key={name} tone="info">{name}</Pill>)}
-          </div>
-        </Card>
-        <Card className="p-5">
-          <SectionLabel icon={FileSignature}>Contract Templates</SectionLabel>
-          <div className="px-5 pb-5 flex flex-wrap gap-2">
-            {(state.contractTemplates || []).map((name) => <Pill key={name} tone="info">{name}</Pill>)}
-          </div>
-        </Card>
-      </div>
-
-      <Card className="p-5">
-        <SectionLabel icon={CheckCircle2}>Portal Defaults</SectionLabel>
-        <div className="px-5 pb-5 grid grid-cols-1 md:grid-cols-2 gap-3">
-          {(state.portalDefaults || []).map((step) => (
-            <div key={step.id} className="rounded-2xl p-4" style={{ background: C.bg }}>
-              <p className="text-sm font-medium" style={{ color: C.ink }}>{step.title}</p>
-              <p className="text-xs mt-1" style={{ color: C.charcoal }}>{step.body}</p>
+      {active === "email" && (
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-5">
+          <Card className="p-5">
+            <SectionLabel icon={Mail}>Email Templates</SectionLabel>
+            <div className="px-5 pb-5 space-y-3">
+              {emailTemplates.map((template) => (
+                <details key={template.key} className="rounded-2xl p-4" style={{ border: `1px solid ${C.line}`, background: "#fff" }}>
+                  <summary className="cursor-pointer text-sm font-medium" style={{ color: C.ink }}>{template.name}</summary>
+                  <div className="mt-4 space-y-3">
+                    <Field label="Subject" value={template.subject || ""} onChange={(value) => actions.updateEmailTemplate(template.key, { subject: value })} />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.25em] mb-1.5" style={{ color: C.taupe }}>Body</p>
+                      <textarea rows={5} value={template.body || ""} onChange={(event) => actions.updateEmailTemplate(template.key, { body: event.target.value })} className="w-full rounded-xl p-3 text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+                    </div>
+                  </div>
+                </details>
+              ))}
             </div>
-          ))}
+          </Card>
+          <Card className="p-5 h-fit">
+            <SectionLabel icon={Sparkles}>Merge Fields</SectionLabel>
+            <div className="px-5 pb-5">
+              <div className="flex flex-wrap gap-2">
+                {mergeFields.map((field) => <Pill key={field} tone="info">{field}</Pill>)}
+              </div>
+              <p className="text-xs mt-4" style={{ color: C.charcoal }}>Use these in email templates. The send preview renders them before anything goes out.</p>
+            </div>
+          </Card>
         </div>
-      </Card>
+      )}
+
+      {active === "locations" && (
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5">
+          <Card className="p-5">
+            <SectionLabel icon={CalendarDays}>Saved Locations</SectionLabel>
+            <div className="px-5 pb-5 space-y-2">
+              {(state.locations || []).map((location) => (
+                <div key={location.id} className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr_auto] gap-2 rounded-2xl p-3" style={{ background: C.bg }}>
+                  <Field compact value={location.name} onChange={(value) => actions.updateLocation(location.id, { name: value })} />
+                  <Field compact value={location.address || location.city || ""} onChange={(value) => actions.updateLocation(location.id, { address: value })} />
+                  <button onClick={() => actions.removeLocation(location.id)} className="px-3 py-2 rounded-xl text-xs font-medium" style={{ background: "#fff", color: C.red, border: `1px solid ${C.line}` }}>Delete</button>
+                </div>
+              ))}
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr_auto] gap-2 rounded-2xl p-3" style={{ border: `1px dashed ${C.line}` }}>
+                <Field compact value={locationDraft.name} onChange={(value) => setLocationDraft((draft) => ({ ...draft, name: value }))} />
+                <Field compact value={locationDraft.address} onChange={(value) => setLocationDraft((draft) => ({ ...draft, address: value }))} />
+                <button onClick={addLocation} className="px-3 py-2 rounded-xl text-xs font-medium text-white" style={{ background: C.forest }}>Add</button>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-5 h-fit">
+            <SectionLabel icon={CalendarDays}>Calendar Connections</SectionLabel>
+            <div className="px-5 pb-5 space-y-2">
+              {[["google", "Google Calendar"], ["apple", "Apple Calendar"]].map(([key, label]) => (
+                <button key={key} onClick={() => actions.updateCalendarConnection(key, !state.calendarConnections?.[key])} className="w-full text-left px-4 py-3 rounded-xl flex items-center justify-between" style={{ background: "#fff", border: `1px solid ${C.line}`, color: C.ink }}>
+                  <span>{state.calendarConnections?.[key] ? "Connected" : "Connect"} {label}</span>
+                  <Pill tone={state.calendarConnections?.[key] ? "done" : "neutral"}>{state.calendarConnections?.[key] ? "on" : "future"}</Pill>
+                </button>
+              ))}
+              <p className="text-xs mt-3" style={{ color: C.charcoal }}>Frontend switches for now. OAuth belongs in the Supabase/Auth build.</p>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {active === "templates" && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <Card className="p-5">
+            <SectionLabel icon={FileText}>Quote Templates</SectionLabel>
+            <div className="px-5 pb-5 space-y-2">
+              {(state.quoteTemplates || []).map((name) => <div key={name} className="rounded-2xl p-3" style={{ background: C.bg }}><p className="text-sm" style={{ color: C.ink }}>{name}</p></div>)}
+            </div>
+          </Card>
+          <Card className="p-5">
+            <SectionLabel icon={FileSignature}>Contract Templates</SectionLabel>
+            <div className="px-5 pb-5 space-y-2">
+              {(state.contractTemplates || []).map((name) => <div key={name} className="rounded-2xl p-3" style={{ background: C.bg }}><p className="text-sm" style={{ color: C.ink }}>{name}</p></div>)}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {active === "portal" && (
+        <Card className="p-5">
+          <SectionLabel icon={CheckCircle2}>Portal Defaults</SectionLabel>
+          <div className="px-5 pb-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+            {(state.portalDefaults || []).map((step) => (
+              <div key={step.id} className="rounded-2xl p-4" style={{ background: C.bg }}>
+                <p className="text-sm font-medium" style={{ color: C.ink }}>{step.title}</p>
+                <p className="text-xs mt-1" style={{ color: C.charcoal }}>{step.body}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
-  );
-}
-
-
-function ActivityPage({ state, actions, setPage }) {
-  const [filter, setFilter] = useState("all");
-  const rows = filter === "messages"
-    ? state.messages.map((message) => ({ id: message.id, clientId: message.clientId, text: `${message.from === "client" ? "Client message" : "Studio reply"}: ${message.text}`, createdAt: message.createdAt }))
-    : state.activity.filter((entry) => filter !== "client" || entry.clientId === state.selectedClientId);
-  return (
-    <Card className="p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <SectionLabel icon={Bell}>Activity</SectionLabel>
-        <div className="flex gap-2">
-          {[
-            ["all", "All Activity"],
-            ["client", "Client Activity"],
-            ["messages", "Messages"],
-          ].map(([key, label]) => (
-            <button key={key} onClick={() => setFilter(key)} className="px-3 py-1.5 rounded-full text-xs font-medium" style={{ background: filter === key ? C.charcoal : C.bg, color: filter === key ? "#fff" : C.charcoal }}>
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="space-y-2">
-        {rows.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>{filter === "client" ? "Select a client to see client-specific activity." : "No activity yet."}</p>}
-        {rows.map((entry) => {
-          const bundle = getClientBundle(state, entry.clientId);
-          return (
-            <button
-              key={entry.id}
-              onClick={() => { if (bundle.client) { actions.selectClient(entry.clientId); setPage("clients"); } }}
-              className="w-full text-left rounded-xl p-3"
-              style={{ background: C.bg, cursor: bundle.client ? "pointer" : "default" }}
-            >
-              <p className="text-sm" style={{ color: bundle.client ? C.forest : C.ink, textDecoration: bundle.client ? "underline" : "none" }}>{entry.text}</p>
-              <p className="text-xs mt-1" style={{ color: C.taupe }}>{bundle.client?.name ? `${bundle.client.name} · ` : ""}{entry.createdAt}</p>
-            </button>
-          );
-        })}
-      </div>
-    </Card>
-  );
-}
-
-function BookingChecklistCard({ selectedBundle, setPage }) {
-  if (!selectedBundle.client) {
-    return <Card className="p-5"><EmptyState title="No client selected" body="Select a client to inspect the booking gate." /></Card>;
-  }
-
-  const stepPage = { quoteAccepted: "quotes", contractSigned: "contracts", paymentReceived: "invoices" };
-
-  return (
-    <Card className="p-5">
-      <SectionLabel icon={CheckCircle2}>Booking Checklist</SectionLabel>
-      <div className="space-y-3">
-        {BOOKING_STEPS.map((step) => {
-          const complete = selectedBundle.booking.steps[step.key];
-          return (
-            <button
-              key={step.key}
-              onClick={() => setPage && setPage(stepPage[step.key] || "projects")}
-              className="w-full flex items-center justify-between rounded-xl px-4 py-3"
-              style={{ background: C.bg }}
-            >
-              <span className="text-sm" style={{ color: C.ink }}>{step.label}</span>
-              <Pill tone={complete ? "done" : "warn"}>{complete ? "Complete" : "Missing"}</Pill>
-            </button>
-          );
-        })}
-      </div>
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-        <SummaryChip label="Booked status" value={selectedBundle.booking.isBooked ? "Booked" : "Not booked"} onClick={() => setPage && setPage("projects")} />
-        <SummaryChip label="Project creation" value={selectedBundle.projectStatus.projectCreated ? "Unlocked" : "Locked"} onClick={() => setPage && setPage("projects")} />
-      </div>
-    </Card>
-  );
-}
-
-function SummaryChip({ label, value, onClick }) {
-  const Wrapper = onClick ? "button" : "div";
-  return (
-    <Wrapper onClick={onClick} className="rounded-2xl p-4 text-left w-full" style={{ background: C.bg }}>
-      <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>{label}</p>
-      <p className="text-sm mt-2 font-medium" style={{ color: C.ink }}>{value}</p>
-    </Wrapper>
   );
 }
 
@@ -4551,6 +4616,20 @@ function ActionCard({ title, body, actionLabel, onClick }) {
       <p className="text-sm mt-2" style={{ color: C.charcoal }}>{body}</p>
       <button onClick={onClick} className="mt-4 text-sm underline" style={{ color: C.forest }}>{actionLabel}</button>
     </div>
+  );
+}
+
+function SummaryChip({ label, value, onClick }) {
+  const Tag = onClick ? "button" : "div";
+  return (
+    <Tag
+      onClick={onClick}
+      className={`rounded-2xl px-3 py-2 text-left ${onClick ? "transition hover:-translate-y-0.5" : ""}`}
+      style={{ background: C.bg, border: `1px solid ${C.line}` }}
+    >
+      <p className="text-[10px] uppercase tracking-[0.22em]" style={{ color: C.taupe }}>{label}</p>
+      <p className="text-sm font-medium mt-1" style={{ color: C.ink }}>{value}</p>
+    </Tag>
   );
 }
 

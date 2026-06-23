@@ -1166,9 +1166,11 @@ export function crmReducer(state, action) {
     case "patch_quote": {
       return {
         ...state,
-        quotes: state.quotes.map((entry) =>
-          entry.id === action.quoteId ? recalcQuote({ ...entry, ...action.patch }) : entry,
-        ),
+        quotes: state.quotes.map((entry) => {
+          if (entry.id !== action.quoteId) return entry;
+          if (entry.locked && !action.patch?.locked) return entry;
+          return recalcQuote({ ...entry, ...action.patch });
+        }),
       };
     }
 
@@ -1217,6 +1219,23 @@ export function crmReducer(state, action) {
             : entry,
         ),
       };
+    }
+
+    case "delete_quote": {
+      const quote = state.quotes.find((entry) => entry.id === action.quoteId);
+      if (!quote) return state;
+      const bundle = getClientBundle(state, quote.clientId);
+      return withActivity(
+        {
+          ...state,
+          quotes: state.quotes.filter((entry) => entry.id !== action.quoteId),
+          sessions: state.sessions.map((entry) =>
+            entry.quoteId === action.quoteId ? { ...entry, quoteId: null } : entry,
+          ),
+        },
+        bundle.client?.name || "Client",
+        `${quote.number} deleted.`,
+      );
     }
 
     case "add_quote_package_group": {
@@ -1368,7 +1387,7 @@ export function crmReducer(state, action) {
         {
           ...state,
           quotes: state.quotes.map((entry) =>
-            entry.id === action.quoteId ? { ...entry, status, [dateField]: dayStamp() } : entry,
+            entry.id === action.quoteId ? { ...entry, status, [dateField]: dayStamp(), locked: action.type === "send_quote" ? true : entry.locked } : entry,
           ),
         },
         getClientBundle(state, quote.clientId).client?.name || "Client",
@@ -2022,6 +2041,23 @@ export function crmReducer(state, action) {
       };
     }
 
+    case "delete_contract": {
+      const contract = state.contracts.find((entry) => entry.id === action.contractId);
+      if (!contract) return state;
+      const bundle = getClientBundle(state, contract.clientId);
+      return withActivity(
+        {
+          ...state,
+          contracts: state.contracts.filter((entry) => entry.id !== action.contractId),
+          sessions: state.sessions.map((entry) =>
+            entry.contractId === action.contractId ? { ...entry, contractId: null } : entry,
+          ),
+        },
+        bundle.client?.name || "Client",
+        `${contract.number} deleted.`,
+      );
+    }
+
     case "add_invoice_catalog_item": {
       return {
         ...state,
@@ -2076,6 +2112,26 @@ export function crmReducer(state, action) {
             : entry,
         ),
       };
+    }
+
+    case "delete_invoice": {
+      const invoice = state.invoices.find((entry) => entry.id === action.invoiceId);
+      if (!invoice) return state;
+      const bundle = getClientBundle(state, invoice.clientId);
+      return withActivity(
+        {
+          ...state,
+          invoices: state.invoices.filter((entry) => entry.id !== action.invoiceId),
+          payments: state.payments.filter((entry) => entry.invoiceId !== action.invoiceId),
+          sessions: state.sessions.map((entry) =>
+            (entry.invoiceIds || []).includes(action.invoiceId)
+              ? { ...entry, invoiceIds: (entry.invoiceIds || []).filter((id) => id !== action.invoiceId) }
+              : entry,
+          ),
+        },
+        bundle.client?.name || "Client",
+        `${invoice.number} deleted.`,
+      );
     }
 
     case "set_availability": {
