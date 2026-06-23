@@ -71,6 +71,15 @@ const buildInvoiceItems = (label, amount) => [
   },
 ];
 
+const DEFAULT_CONTRACT_CLAUSES = [
+  { id: "scope", title: "1. Scope of Services", body: "EC Creative Studios (\"Photographer\") agrees to provide photography services for the session described in the associated quote, including pre-session planning, the session itself, and post-production editing of the final selected images." },
+  { id: "payment", title: "2. Payment Terms", body: "A non-refundable deposit secures the session date. The remaining balance is due according to the invoice schedule. Sessions will not be scheduled or held without a paid deposit and a signed agreement." },
+  { id: "reschedule", title: "3. Rescheduling & Cancellation", body: "Client may reschedule once at no charge with at least 14 days' notice, subject to Photographer availability. Cancellations forfeit the deposit. Photographer-initiated reschedules will not incur any fee to Client." },
+  { id: "usage", title: "4. Usage Rights & Licensing", body: "Client receives a personal-use license to the final delivered images. Photographer retains copyright and may use images for portfolio, marketing, and promotional purposes unless a separate privacy agreement is signed." },
+  { id: "delivery", title: "5. Delivery", body: "Final edited images are delivered via online gallery within the timeframe stated at booking. Rush delivery may be available for an additional fee." },
+  { id: "liability", title: "6. Liability", body: "Photographer's liability is limited to the amount paid for services. Photographer is not responsible for circumstances beyond reasonable control, including but not limited to illness, weather, or equipment failure, and will make reasonable efforts to reschedule in such cases." },
+];
+
 export const PIPELINE_STAGES = [
   { key: "new_inquiry", label: "New Inquiry" },
   { key: "needs_review", label: "Needs Review" },
@@ -242,6 +251,7 @@ export function createInitialState() {
 
   return {
     selectedClientId: clientSarahId,
+    studioSettings: { heroImageUrl: "", heroHeadline: "Admin first. Booking rules before everything else." },
     packages: basePackages,
     addons: baseAddons,
     locations: [
@@ -361,6 +371,7 @@ export function createInitialState() {
         sentAt: "Jun 10, 2026",
         signedAt: "Jun 11, 2026",
         signerName: "Sarah Garcia",
+        clauses: DEFAULT_CONTRACT_CLAUSES,
       },
       {
         id: thomasContractId,
@@ -373,6 +384,7 @@ export function createInitialState() {
         sentAt: "Jun 21, 2026",
         signedAt: "",
         signerName: "",
+        clauses: DEFAULT_CONTRACT_CLAUSES,
       },
     ],
     invoices: [sarahDepositInvoice],
@@ -798,6 +810,23 @@ export function crmReducer(state, action) {
       );
     }
 
+    case "add_quote_catalog_item": {
+      return {
+        ...state,
+        quotes: state.quotes.map((entry) =>
+          entry.id === action.quoteId
+            ? recalcQuote({
+                ...entry,
+                lineItems: [
+                  ...entry.lineItems,
+                  { id: nextId("qi"), name: action.name, description: action.description || "", quantity: 1, unitPrice: action.unitPrice || 0, optional: Boolean(action.optional) },
+                ],
+              })
+            : entry,
+        ),
+      };
+    }
+
     case "patch_quote": {
       return {
         ...state,
@@ -896,6 +925,7 @@ export function crmReducer(state, action) {
         sentAt: "",
         signedAt: "",
         signerName: "",
+        clauses: DEFAULT_CONTRACT_CLAUSES.map((clause) => ({ ...clause })),
       };
       return withActivity(
         {
@@ -1343,6 +1373,7 @@ export function crmReducer(state, action) {
             sentAt: "",
             signedAt: "",
             signerName: "",
+            clauses: DEFAULT_CONTRACT_CLAUSES.map((clause) => ({ ...clause })),
           };
           working = {
             ...working,
@@ -1500,6 +1531,73 @@ export function crmReducer(state, action) {
         bundle.client?.name || "Client",
         "Gallery marked delivered.",
       );
+    }
+
+    case "update_studio_settings": {
+      return { ...state, studioSettings: { ...state.studioSettings, ...action.patch } };
+    }
+
+    case "patch_contract": {
+      return {
+        ...state,
+        contracts: state.contracts.map((entry) => (entry.id === action.contractId ? { ...entry, ...action.patch } : entry)),
+      };
+    }
+
+    case "add_invoice_catalog_item": {
+      return {
+        ...state,
+        invoices: state.invoices.map((entry) =>
+          entry.id === action.invoiceId
+            ? recalcInvoice({
+                ...entry,
+                lineItems: [
+                  ...entry.lineItems,
+                  { id: nextId("ii"), name: action.name, description: action.description || "", quantity: 1, unitPrice: action.unitPrice || 0 },
+                ],
+              })
+            : entry,
+        ),
+      };
+    }
+
+    case "add_invoice_item": {
+      return {
+        ...state,
+        invoices: state.invoices.map((entry) =>
+          entry.id === action.invoiceId
+            ? recalcInvoice({
+                ...entry,
+                lineItems: [...entry.lineItems, { id: nextId("ii"), name: "Custom line item", description: "", quantity: 1, unitPrice: 0 }],
+              })
+            : entry,
+        ),
+      };
+    }
+
+    case "patch_invoice_item": {
+      return {
+        ...state,
+        invoices: state.invoices.map((entry) =>
+          entry.id === action.invoiceId
+            ? recalcInvoice({
+                ...entry,
+                lineItems: entry.lineItems.map((item) => (item.id === action.itemId ? { ...item, ...action.patch } : item)),
+              })
+            : entry,
+        ),
+      };
+    }
+
+    case "remove_invoice_item": {
+      return {
+        ...state,
+        invoices: state.invoices.map((entry) =>
+          entry.id === action.invoiceId
+            ? recalcInvoice({ ...entry, lineItems: entry.lineItems.filter((item) => item.id !== action.itemId) })
+            : entry,
+        ),
+      };
     }
 
     default:

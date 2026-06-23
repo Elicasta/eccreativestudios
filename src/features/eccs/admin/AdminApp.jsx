@@ -8,10 +8,12 @@ import {
   Check,
   CheckCircle2,
   ChevronLeft,
+  ChevronDown,
   ChevronRight,
   ChevronsRight,
   ClipboardList,
   CreditCard,
+  Eye,
   FileSignature,
   FileText,
   FolderKanban,
@@ -46,29 +48,41 @@ import {
 import { Avatar, Card, EmptyState, Pill, SectionLabel, StatusLight } from "../components/ui";
 
 const NAV = [
-  { key: "dashboard", label: "Dashboard", icon: FolderKanban },
-  { key: "pipeline", label: "Pipeline", icon: Sparkles },
-  { key: "inquiries", label: "Inquiries", icon: Inbox },
-  { key: "clients", label: "Clients", icon: Users },
-  { key: "projects", label: "Projects", icon: ClipboardList },
-  { key: "quotes", label: "Quotes", icon: FileText },
-  { key: "contracts", label: "Contracts", icon: FileSignature },
-  { key: "invoices", label: "Invoices", icon: Receipt },
-  { key: "payments", label: "Payments", icon: CreditCard },
-  { key: "sessions", label: "Sessions", icon: CalendarDays },
-  { key: "calendar", label: "Calendar", icon: CalendarDays },
-  { key: "portal", label: "Portal Editor", icon: LayoutTemplate },
-  { key: "emails", label: "Emails", icon: Mail },
-  { key: "marketing", label: "Email Marketing", icon: Megaphone },
-  { key: "social", label: "Social Messaging", icon: MessageCircle },
-  { key: "forms", label: "Contact Forms", icon: ClipboardList },
-  { key: "templates", label: "Templates", icon: LayoutTemplate },
-  { key: "workflows", label: "Workflows", icon: Workflow },
-  { key: "activity", label: "Activity", icon: Bell },
-  { key: "settings", label: "Settings", icon: SettingsIcon },
-  { key: "branding", label: "Branding", icon: Palette },
-  { key: "team", label: "Team", icon: UserCog },
+  { group: null, items: [
+    { key: "dashboard", label: "Dashboard", icon: FolderKanban },
+    { key: "pipeline", label: "Pipeline", icon: Sparkles },
+    { key: "activity", label: "Activity", icon: Bell },
+  ] },
+  { group: "Clients", items: [
+    { key: "inquiries", label: "Inquiries", icon: Inbox },
+    { key: "clients", label: "Clients", icon: Users },
+    { key: "projects", label: "Projects", icon: ClipboardList },
+    { key: "sessions", label: "Sessions", icon: CalendarDays },
+    { key: "calendar", label: "Calendar", icon: CalendarDays },
+    { key: "portal", label: "Portal Editor", icon: LayoutTemplate },
+  ] },
+  { group: "Sales", items: [
+    { key: "quotes", label: "Quotes", icon: FileText },
+    { key: "contracts", label: "Contracts", icon: FileSignature },
+    { key: "invoices", label: "Invoices", icon: Receipt },
+    { key: "payments", label: "Payments", icon: CreditCard },
+  ] },
+  { group: "Communication", items: [
+    { key: "emails", label: "Emails", icon: Mail },
+    { key: "marketing", label: "Email Marketing", icon: Megaphone },
+    { key: "social", label: "Social Messaging", icon: MessageCircle },
+    { key: "forms", label: "Contact Forms", icon: ClipboardList },
+    { key: "templates", label: "Templates", icon: LayoutTemplate },
+    { key: "workflows", label: "Workflows", icon: Workflow },
+  ] },
+  { group: "Studio", items: [
+    { key: "settings", label: "Settings", icon: SettingsIcon },
+    { key: "branding", label: "Branding", icon: Palette },
+    { key: "team", label: "Team", icon: UserCog },
+  ] },
 ];
+
+const FLAT_NAV = NAV.flatMap((group) => group.items);
 
 const BOTTOM_NAV = [
   { key: "dashboard", label: "Home", icon: FolderKanban },
@@ -102,6 +116,8 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
     setDrawer(false);
   };
 
+  const currentNavItem = FLAT_NAV.find((item) => item.key === page);
+
   return (
     <div className="flex" style={{ minHeight: "calc(100vh - 44px)" }}>
       <aside className="hidden md:flex md:flex-col w-72 shrink-0 px-4 py-6" style={{ background: C.charcoal }}>
@@ -118,7 +134,15 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
       )}
 
       <main className="flex-1 min-w-0 pb-16 md:pb-0">
-        <Topbar query={query} setQuery={setQuery} onMenu={() => setDrawer(true)} />
+        <Topbar
+          query={query}
+          setQuery={setQuery}
+          onMenu={() => setDrawer(true)}
+          title={currentNavItem?.label || "Dashboard"}
+          state={state}
+          selectedBundle={selectedBundle}
+          actions={actions}
+        />
         <div className="p-4 sm:p-6 lg:p-8 max-w-[1520px] mx-auto space-y-5">
           {page === "dashboard" && (
             <DashboardPage
@@ -130,8 +154,8 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
               setApp={setApp}
             />
           )}
-          {page === "pipeline" && <PipelinePage state={state} actions={actions} />}
-          {page === "inquiries" && <InquiriesPage state={state} actions={actions} />}
+          {page === "pipeline" && <PipelinePage state={state} actions={actions} setPage={go} />}
+          {page === "inquiries" && <InquiriesPage state={state} actions={actions} setPage={go} />}
           {page === "clients" && (
             <ClientsPage
               state={state}
@@ -142,22 +166,22 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
             />
           )}
           {page === "projects" && <ProjectsPage state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
-          {page === "quotes" && <QuotesPage state={state} selectedBundle={selectedBundle} actions={actions} />}
-          {page === "contracts" && <ContractsPage selectedBundle={selectedBundle} actions={actions} />}
-          {page === "invoices" && <InvoicesPage state={state} selectedBundle={selectedBundle} actions={actions} />}
-          {page === "payments" && <PaymentsPage state={state} selectedBundle={selectedBundle} actions={actions} />}
-          {page === "sessions" && <SessionsPage state={state} selectedBundle={selectedBundle} actions={actions} />}
-          {page === "calendar" && <CalendarPage state={state} selectedBundle={selectedBundle} actions={actions} />}
-          {page === "portal" && <PortalPage selectedBundle={selectedBundle} actions={actions} setApp={setApp} />}
-          {page === "emails" && <EmailsPage selectedBundle={selectedBundle} actions={actions} />}
-          {page === "marketing" && <MarketingPage state={state} />}
+          {page === "quotes" && <QuotesPage state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
+          {page === "contracts" && <ContractsPage selectedBundle={selectedBundle} actions={actions} setPage={go} />}
+          {page === "invoices" && <InvoicesPage state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
+          {page === "payments" && <PaymentsPage state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
+          {page === "sessions" && <SessionsPage state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
+          {page === "calendar" && <CalendarPage state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
+          {page === "portal" && <PortalPage selectedBundle={selectedBundle} actions={actions} setApp={setApp} setPage={go} />}
+          {page === "emails" && <EmailsPage selectedBundle={selectedBundle} actions={actions} setPage={go} />}
+          {page === "marketing" && <MarketingPage state={state} setPage={go} />}
           {page === "social" && <SocialPage />}
           {page === "forms" && <FormsPage />}
           {page === "templates" && <TemplatesPage />}
           {page === "workflows" && <PlaceholderPage title="Workflows" body="Automation rules (auto-send prep guide, auto-remind on unpaid invoice) live here in v2. This skeleton moves clients through the pipeline via real actions and Manual Override instead." />}
-          {page === "activity" && <ActivityPage state={state} />}
+          {page === "activity" && <ActivityPage state={state} actions={actions} setPage={go} />}
           {page === "settings" && <PlaceholderPage title="Settings" body="Studio info, tax rates, payment methods, notification preferences." />}
-          {page === "branding" && <PlaceholderPage title="Branding" body="Logo, color palette, fonts. The app already runs on the real EC Creative Studios system: charcoal, cream, taupe, blue, forest green." />}
+          {page === "branding" && <BrandingPage state={state} actions={actions} />}
           {page === "team" && <PlaceholderPage title="Team" body="Add Emily and any second shooters or editors with role-based access once auth exists." />}
         </div>
       </main>
@@ -194,22 +218,31 @@ function Sidebar({ page, setPage, onClose }) {
         </div>
         {onClose && <button onClick={onClose}><X size={18} color={C.taupe} /></button>}
       </div>
-      <nav className="space-y-1 flex-1 overflow-y-auto ecc-scrollbar">
-        {NAV.map((item) => {
-          const Icon = item.icon;
-          const active = item.key === page;
-          return (
-            <button
-              key={item.key}
-              onClick={() => setPage(item.key)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm"
-              style={{ background: active ? C.forest : "transparent", color: active ? "#fff" : C.cream }}
-            >
-              <Icon size={16} />
-              {item.label}
-            </button>
-          );
-        })}
+      <nav className="space-y-4 flex-1 overflow-y-auto ecc-scrollbar">
+        {NAV.map((group, groupIndex) => (
+          <div key={group.group || `g${groupIndex}`}>
+            {group.group && (
+              <p className="text-[10px] uppercase tracking-[0.25em] px-3 mb-1.5" style={{ color: "rgba(189,167,150,0.7)" }}>{group.group}</p>
+            )}
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const active = item.key === page;
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => setPage(item.key)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm"
+                    style={{ background: active ? C.forest : "transparent", color: active ? "#fff" : C.cream }}
+                  >
+                    <Icon size={16} />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
       <div className="pt-4 mt-4 text-xs" style={{ borderTop: "1px solid rgba(255,255,255,0.1)", color: C.taupe }}>
         Admin-first local CRM
@@ -218,14 +251,15 @@ function Sidebar({ page, setPage, onClose }) {
   );
 }
 
-function Topbar({ query, setQuery, onMenu }) {
+function Topbar({ query, setQuery, onMenu, title, state, selectedBundle, actions }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
   return (
-    <div className="flex items-center gap-3 px-4 sm:px-6 py-4" style={{ borderBottom: `1px solid ${C.line}` }}>
+    <div className="relative flex items-center gap-3 px-4 sm:px-6 py-4" style={{ borderBottom: `1px solid ${C.line}` }}>
       <button className="md:hidden" onClick={onMenu}><Menu size={20} color={C.ink} /></button>
       <p className="ecc-display text-2xl flex-1" style={{ color: C.ink }}>
-        Studio Admin
+        {title}
       </p>
-      <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-full w-full max-w-md" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+      <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-full w-full max-w-xs" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
         <Search size={14} color={C.taupe} />
         <input
           value={query}
@@ -235,88 +269,175 @@ function Topbar({ query, setQuery, onMenu }) {
           style={{ color: C.ink }}
         />
       </div>
-      <button className="w-10 h-10 rounded-full flex items-center justify-center text-white" style={{ background: C.forest }}>
+
+      <button
+        onClick={() => setPickerOpen((open) => !open)}
+        className="flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium"
+        style={{ background: C.cream, color: C.ink }}
+      >
+        <Avatar name={selectedBundle.client?.name || "?"} size={22} />
+        <span className="hidden lg:inline max-w-[140px] truncate">{selectedBundle.client?.name || "Choose client"}</span>
+        <ChevronDown size={14} color={C.taupe} />
+      </button>
+
+      <button className="w-10 h-10 rounded-full flex items-center justify-center text-white shrink-0" style={{ background: C.forest }}>
         <Plus size={16} />
       </button>
+
+      {pickerOpen && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setPickerOpen(false)} />
+          <div className="absolute right-4 sm:right-6 top-full mt-1 w-72 rounded-2xl shadow-lg z-40 max-h-80 overflow-y-auto ecc-scrollbar" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+            <p className="text-[10px] uppercase tracking-[0.25em] px-4 pt-3 pb-2" style={{ color: C.taupe }}>Switch client — works from any page</p>
+            {state.clients.map((client) => (
+              <button
+                key={client.id}
+                onClick={() => { actions.selectClient(client.id); setPickerOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left"
+                style={{ background: client.id === state.selectedClientId ? C.cream : "transparent" }}
+              >
+                <Avatar name={client.name} size={26} />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate" style={{ color: C.ink }}>{client.name}</p>
+                  <p className="text-xs truncate" style={{ color: C.taupe }}>{client.sessionType}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 function DashboardPage({ state, selectedBundle, filteredClients, actions, setPage, setApp }) {
   const metrics = [
-    { label: "Open Inquiries", value: state.inquiries.filter((entry) => entry.status === "new").length },
-    { label: "Quotes Awaiting Decision", value: state.quotes.filter((entry) => ["draft", "sent", "viewed"].includes(entry.status)).length },
-    { label: "Contracts Awaiting Signature", value: state.contracts.filter((entry) => entry.status === "sent").length },
-    { label: "Booked Clients", value: state.clients.filter((client) => getClientBundle(state, client.id).booking.isBooked).length },
+    { label: "Open Inquiries", value: state.inquiries.filter((entry) => entry.status === "new").length, page: "inquiries" },
+    { label: "Quotes Awaiting Decision", value: state.quotes.filter((entry) => ["draft", "sent", "viewed"].includes(entry.status)).length, page: "quotes" },
+    { label: "Contracts Awaiting Signature", value: state.contracts.filter((entry) => entry.status === "sent").length, page: "contracts" },
+    { label: "Booked Clients", value: state.clients.filter((client) => getClientBundle(state, client.id).booking.isBooked).length, page: "projects" },
   ];
+
+  const goToClient = (clientId) => {
+    actions.selectClient(clientId);
+    setPage("clients");
+  };
+
+  const upcomingSessions = state.sessions
+    .filter((session) => session.sessionDate)
+    .map((session) => ({ session, bundle: getClientBundle(state, session.clientId) }))
+    .slice(0, 4);
+
+  const heroUrl = state.studioSettings?.heroImageUrl;
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[1.18fr_0.82fr] gap-5">
       <div className="space-y-5">
-        <Card className="p-8 sm:p-10" style={{ background: `linear-gradient(135deg, ${C.charcoal}, ${C.ink})`, borderColor: "transparent" }}>
-          <p className="text-[10px] uppercase tracking-[0.35em] mb-3" style={{ color: C.taupe }}>
-            EC Creative Studios
-          </p>
-          <p className="ecc-display text-4xl text-white max-w-xl leading-tight">
-            Admin first. Booking rules before everything else.
-          </p>
-          <p className="text-sm mt-4 max-w-lg" style={{ color: C.cream }}>
-            This dashboard now makes the quote, contract, payment, project, portal, and calendar handoff explicit.
-          </p>
+        <Card className="overflow-hidden" style={{ borderColor: "transparent" }}>
+          <div className={`grid grid-cols-1 ${heroUrl ? "sm:grid-cols-[1.2fr_1fr]" : ""}`} style={{ background: `linear-gradient(135deg, ${C.charcoal}, ${C.ink})` }}>
+            <div className="p-8 sm:p-10">
+              <p className="text-[10px] uppercase tracking-[0.35em] mb-3" style={{ color: C.taupe }}>
+                EC Creative Studios
+              </p>
+              <p className="ecc-display text-4xl text-white max-w-xl leading-tight">
+                {state.studioSettings?.heroHeadline || "Admin first. Booking rules before everything else."}
+              </p>
+              <p className="text-sm mt-4 max-w-lg" style={{ color: C.cream }}>
+                This dashboard now makes the quote, contract, payment, project, portal, and calendar handoff explicit.
+              </p>
+              {!heroUrl && (
+                <button onClick={() => setPage("branding")} className="text-xs underline mt-4 inline-block" style={{ color: C.taupe }}>
+                  Add a studio photo in Branding →
+                </button>
+              )}
+            </div>
+            {heroUrl && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={heroUrl} alt="Studio" className="w-full h-full object-cover min-h-[220px]" />
+            )}
+          </div>
         </Card>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {metrics.map((metric) => (
-            <Card key={metric.label} className="p-4">
-              <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>
-                {metric.label}
-              </p>
-              <p className="ecc-display text-3xl mt-2" style={{ color: C.ink }}>
-                {metric.value}
-              </p>
-            </Card>
+            <button key={metric.label} onClick={() => setPage(metric.page)} className="text-left">
+              <Card className="p-4 h-full">
+                <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>
+                  {metric.label}
+                </p>
+                <p className="ecc-display text-3xl mt-2" style={{ color: C.ink }}>
+                  {metric.value}
+                </p>
+              </Card>
+            </button>
           ))}
         </div>
 
-        <Card className="p-5">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.3em]" style={{ color: C.taupe }}>
-                Selected Client
-              </p>
-              <p className="ecc-display text-3xl" style={{ color: C.ink }}>
-                {selectedBundle.client?.name || "No client selected"}
-              </p>
+        {selectedBundle.client ? (
+          <Card className="p-5">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.3em]" style={{ color: C.taupe }}>
+                  Selected Client
+                </p>
+                <p className="ecc-display text-3xl" style={{ color: C.ink }}>
+                  {selectedBundle.client.name}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={() => actions.selectClient(null)} className="text-xs underline" style={{ color: C.charcoal }}>Clear</button>
+                <button onClick={() => setApp("client")} className="text-sm underline" style={{ color: C.forest }}>Preview portal</button>
+              </div>
             </div>
-            <button onClick={() => setApp("client")} className="text-sm underline" style={{ color: C.forest }}>
-              Preview portal
-            </button>
-          </div>
-          {selectedBundle.client && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <SummaryChip label="Pipeline" value={PIPELINE_LABELS[selectedBundle.stage]} />
-                <SummaryChip label="Booked" value={selectedBundle.booking.isBooked ? "Yes" : "Not yet"} />
-                <SummaryChip label="Project" value={selectedBundle.projectStatus.projectCreated ? "Created" : "Locked"} />
-                <SummaryChip label="Outstanding" value={formatCurrency(selectedBundle.invoices.reduce((total, invoice) => total + invoice.balanceDue, 0))} />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                <ActionCard title="Next step" body={nextActionText(selectedBundle)} actionLabel="Open workflow" onClick={() => setPage("projects")} />
-                <ActionCard title="Portal handoff" body={selectedBundle.projectStatus.portalAccessSent ? "Portal email already sent." : "Send portal access after booking is complete."} actionLabel="Open emails" onClick={() => setPage("emails")} />
-              </div>
-            </>
-          )}
-        </Card>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <SummaryChip label="Pipeline" value={PIPELINE_LABELS[selectedBundle.stage]} onClick={() => setPage("pipeline")} />
+              <SummaryChip label="Booked" value={selectedBundle.booking.isBooked ? "Yes" : "Not yet"} onClick={() => setPage("projects")} />
+              <SummaryChip label="Project" value={selectedBundle.projectStatus.projectCreated ? "Created" : "Locked"} onClick={() => setPage("projects")} />
+              <SummaryChip label="Outstanding" value={formatCurrency(selectedBundle.invoices.reduce((total, invoice) => total + invoice.balanceDue, 0))} onClick={() => setPage("invoices")} />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <ActionCard title="Next step" body={nextActionText(selectedBundle)} actionLabel="Open workflow" onClick={() => setPage("projects")} />
+              <ActionCard title="Portal handoff" body={selectedBundle.projectStatus.portalAccessSent ? "Portal email already sent." : "Send portal access after booking is complete."} actionLabel="Open emails" onClick={() => setPage("emails")} />
+            </div>
+          </Card>
+        ) : (
+          <Card>
+            <div className="flex items-center justify-between px-5 pt-5 pb-1">
+              <SectionLabel icon={Sparkles}>Pipeline Overview</SectionLabel>
+              <button onClick={() => setPage("pipeline")} className="text-xs underline" style={{ color: C.forest }}>Open full pipeline</button>
+            </div>
+            <p className="text-xs px-5 pb-3" style={{ color: C.taupe }}>No client selected — here's the sales pipeline at a glance. Click anyone to focus on them.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 px-5 pb-5">
+              {PIPELINE_STAGES.slice(1, 9).map((stage) => {
+                const items = state.clients.filter((client) => getClientBundle(state, client.id).stage === stage.key);
+                return (
+                  <div key={stage.key} className="rounded-xl p-3" style={{ border: `1px solid ${C.line}` }}>
+                    <p className="text-[10px] uppercase tracking-[0.2em]" style={{ color: C.taupe }}>{stage.label}</p>
+                    <p className="ecc-display text-2xl mb-1" style={{ color: C.ink }}>{items.length}</p>
+                    {items.slice(0, 2).map((client) => (
+                      <button key={client.id} onClick={() => goToClient(client.id)} className="block w-full text-left text-xs py-1 truncate" style={{ color: C.forest }}>
+                        {client.name}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
 
         <Card className="p-5">
-          <SectionLabel icon={Users}>Client List</SectionLabel>
-          <div className="space-y-2">
-            {filteredClients.map((client) => {
+          <div className="flex items-center justify-between px-5 pt-5 pb-1">
+            <SectionLabel icon={Users}>Client List</SectionLabel>
+            <button onClick={() => setPage("clients")} className="text-xs underline" style={{ color: C.forest }}>View all</button>
+          </div>
+          <div className="space-y-2 px-5 pb-5">
+            {filteredClients.slice(0, 6).map((client) => {
               const bundle = getClientBundle(state, client.id);
               return (
                 <button
                   key={client.id}
-                  onClick={() => actions.selectClient(client.id)}
+                  onClick={() => goToClient(client.id)}
                   className="w-full flex items-center justify-between p-3 rounded-xl text-left"
                   style={{ background: client.id === state.selectedClientId ? C.cream : "#fff", border: `1px solid ${C.line}` }}
                 >
@@ -338,34 +459,78 @@ function DashboardPage({ state, selectedBundle, filteredClients, actions, setPag
       </div>
 
       <div className="space-y-5">
-        <BookingChecklistCard selectedBundle={selectedBundle} />
+        {selectedBundle.client && <BookingChecklistCard selectedBundle={selectedBundle} setPage={setPage} />}
+
+        <RevenueCard state={state} setPage={setPage} />
 
         <Card className="p-5">
-          <SectionLabel icon={Inbox}>New Inquiry Queue</SectionLabel>
-          <div className="space-y-3">
+          <div className="flex items-center justify-between px-5 pt-5 pb-1">
+            <SectionLabel icon={CalendarDays}>Upcoming Sessions</SectionLabel>
+            <button onClick={() => setPage("calendar")} className="text-xs underline" style={{ color: C.forest }}>View calendar</button>
+          </div>
+          <div className="px-5 pb-5">
+            {upcomingSessions.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>Nothing scheduled yet.</p>}
+            {upcomingSessions.map(({ session, bundle }, index) => (
+              <button
+                key={session.id}
+                onClick={() => goToClient(session.clientId)}
+                className="w-full text-left flex items-center justify-between py-2.5"
+                style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}` }}
+              >
+                <div>
+                  <p className="text-sm" style={{ color: C.ink }}>{bundle.client?.sessionType} — {bundle.client?.name}</p>
+                  <p className="text-xs" style={{ color: C.taupe }}>{session.sessionDate} · {session.sessionTime || "TBD"}</p>
+                </div>
+                <ChevronRight size={14} color={C.taupe} />
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center justify-between px-5 pt-5 pb-1">
+            <SectionLabel icon={Inbox}>New Inquiry Queue</SectionLabel>
+            <button onClick={() => setPage("inquiries")} className="text-xs underline" style={{ color: C.forest }}>View all</button>
+          </div>
+          <div className="space-y-3 px-5 pb-5">
             {state.inquiries.filter((entry) => entry.status === "new").map((entry) => (
-              <div key={entry.id} className="rounded-xl p-3" style={{ background: C.bg }}>
+              <button key={entry.id} onClick={() => setPage("inquiries")} className="w-full text-left rounded-xl p-3" style={{ background: C.bg }}>
                 <p className="text-sm font-medium" style={{ color: C.ink }}>{entry.name}</p>
                 <p className="text-xs mt-1" style={{ color: C.charcoal }}>
                   {entry.sessionType} • {entry.budgetRange}
                 </p>
-                <button onClick={() => actions.approveInquiry(entry.id)} className="mt-3 px-3 py-2 rounded-full text-xs font-medium text-white" style={{ background: C.forest }}>
+                <span
+                  onClick={(event) => { event.stopPropagation(); actions.approveInquiry(entry.id); }}
+                  className="inline-block mt-3 px-3 py-2 rounded-full text-xs font-medium text-white"
+                  style={{ background: C.forest }}
+                >
                   Approve and create client
-                </button>
-              </div>
+                </span>
+              </button>
             ))}
+            {state.inquiries.filter((entry) => entry.status === "new").length === 0 && (
+              <p className="text-sm" style={{ color: C.taupe }}>No new inquiries waiting.</p>
+            )}
           </div>
         </Card>
 
         <Card className="p-5">
           <SectionLabel icon={Bell}>Recent Activity</SectionLabel>
-          <div className="space-y-3">
-            {state.activity.slice(0, 8).map((entry) => (
-              <div key={entry.id} className="pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
-                <p className="text-sm" style={{ color: C.ink }}>{entry.text}</p>
-                <p className="text-xs mt-1" style={{ color: C.taupe }}>{entry.createdAt}</p>
-              </div>
-            ))}
+          <div className="px-5 pb-5">
+            {state.activity.slice(0, 8).map((entry, index) => {
+              const bundle = getClientBundle(state, entry.clientId);
+              return (
+                <button
+                  key={entry.id}
+                  onClick={() => bundle.client && goToClient(entry.clientId)}
+                  className="w-full text-left py-3"
+                  style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}`, cursor: bundle.client ? "pointer" : "default" }}
+                >
+                  <p className="text-sm" style={{ color: bundle.client ? C.forest : C.ink, textDecoration: bundle.client ? "underline" : "none" }}>{entry.text}</p>
+                  <p className="text-xs mt-1" style={{ color: C.taupe }}>{entry.createdAt}</p>
+                </button>
+              );
+            })}
           </div>
         </Card>
       </div>
@@ -373,83 +538,251 @@ function DashboardPage({ state, selectedBundle, filteredClients, actions, setPag
   );
 }
 
-function PipelinePage({ state, actions }) {
-  return (
-    <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-      {PIPELINE_STAGES.slice(0, 10).map((stage) => {
-        const items = state.clients.filter((client) => getClientBundle(state, client.id).stage === stage.key);
-        return (
-          <Card key={stage.key} className="p-4">
-            <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>{stage.label}</p>
-            <p className="ecc-display text-3xl mt-2 mb-4" style={{ color: C.ink }}>{items.length}</p>
-            <div className="space-y-2">
-              {items.length === 0 && <p className="text-xs" style={{ color: C.charcoal }}>No records here.</p>}
-              {items.map((client) => (
-                <button key={client.id} onClick={() => actions.selectClient(client.id)} className="w-full p-3 rounded-xl text-left" style={{ background: C.bg }}>
-                  <p className="text-sm font-medium" style={{ color: C.ink }}>{client.name}</p>
-                  <p className="text-xs mt-1" style={{ color: C.charcoal }}>{client.sessionType}</p>
-                </button>
-              ))}
-            </div>
-          </Card>
-        );
-      })}
-    </div>
-  );
-}
+function RevenueCard({ state, setPage }) {
+  const collected = state.invoices.reduce((sum, entry) => sum + entry.amountPaid, 0);
+  const buckets = [
+    { key: "draft", label: "Draft", color: C.line, amount: state.invoices.filter((i) => i.status === "draft").reduce((s, i) => s + i.total, 0) },
+    { key: "sent", label: "Sent, unpaid", color: C.blue, amount: state.invoices.filter((i) => i.status === "sent").reduce((s, i) => s + i.balanceDue, 0) },
+    { key: "partial", label: "Partially paid", color: "#c98a3e", amount: state.invoices.filter((i) => i.status === "partially_paid").reduce((s, i) => s + i.balanceDue, 0) },
+    { key: "paid", label: "Collected", color: C.forest, amount: collected },
+  ];
+  const total = buckets.reduce((sum, bucket) => sum + bucket.amount, 0) || 1;
+  let acc = 0;
+  const stops = buckets.map((bucket) => {
+    const start = (acc / total) * 360;
+    acc += bucket.amount;
+    const end = (acc / total) * 360;
+    return `${bucket.color} ${start}deg ${end}deg`;
+  });
 
-function InquiriesPage({ state, actions }) {
   return (
     <Card className="p-5">
-      <SectionLabel icon={Inbox}>Incoming Leads</SectionLabel>
-      <div className="space-y-3">
-        {state.inquiries.map((inquiry) => (
-          <div key={inquiry.id} className="rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3" style={{ background: inquiry.status === "new" ? "#fff8ef" : "#fff", border: `1px solid ${C.line}` }}>
-            <div>
-              <p className="text-sm font-medium" style={{ color: C.ink }}>{inquiry.name}</p>
-              <p className="text-xs mt-1" style={{ color: C.charcoal }}>
-                {inquiry.sessionType} • {inquiry.budgetRange} • {inquiry.receivedAt}
-              </p>
-              <p className="text-xs mt-2" style={{ color: C.charcoal }}>{inquiry.notes}</p>
+      <div className="flex items-center justify-between px-5 pt-5 pb-1">
+        <SectionLabel icon={CreditCard}>Revenue Snapshot</SectionLabel>
+        <button onClick={() => setPage("payments")} className="text-xs underline" style={{ color: C.forest }}>View payments</button>
+      </div>
+      <div className="px-5 pb-5 flex items-center gap-5">
+        <div className="w-20 h-20 rounded-full shrink-0" style={{ background: `conic-gradient(${stops.join(",")})` }}>
+          <div className="w-12 h-12 rounded-full m-auto relative top-4" style={{ background: "#fff" }} />
+        </div>
+        <div className="space-y-1.5 flex-1">
+          {buckets.map((bucket) => (
+            <div key={bucket.key} className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1.5" style={{ color: C.charcoal }}>
+                <span className="w-2 h-2 rounded-full" style={{ background: bucket.color }} /> {bucket.label}
+              </span>
+              <span style={{ color: C.ink }}>{formatCurrency(bucket.amount)}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Pill tone={inquiry.status === "new" ? "warn" : "info"}>{inquiry.status}</Pill>
-              {inquiry.status === "new" && (
-                <button onClick={() => actions.approveInquiry(inquiry.id)} className="px-3 py-2 rounded-full text-xs font-medium text-white" style={{ background: C.forest }}>
-                  Approve
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </Card>
   );
 }
 
-function ClientsPage({ state, selectedBundle, filteredClients, actions, setPage }) {
+function PipelinePage({ state, actions, setPage }) {
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-5">
+    <div className="space-y-3">
+      <Card className="p-4 flex items-center justify-between">
+        <p className="text-sm" style={{ color: C.charcoal }}>Click any card to focus that client everywhere in admin — Quotes, Contracts, Invoices, Portal Editor all follow.</p>
+        <button onClick={() => setPage("clients")} className="text-xs underline shrink-0 ml-3" style={{ color: C.forest }}>View as list</button>
+      </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        {PIPELINE_STAGES.slice(0, 10).map((stage) => {
+          const items = state.clients.filter((client) => getClientBundle(state, client.id).stage === stage.key);
+          return (
+            <Card key={stage.key} className="p-4">
+              <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>{stage.label}</p>
+              <p className="ecc-display text-3xl mt-2 mb-4" style={{ color: C.ink }}>{items.length}</p>
+              <div className="space-y-2">
+                {items.length === 0 && <p className="text-xs" style={{ color: C.charcoal }}>No records here.</p>}
+                {items.map((client) => {
+                  const bundle = getClientBundle(state, client.id);
+                  const value = bundle.primaryQuote?.total || 0;
+                  const active = client.id === state.selectedClientId;
+                  return (
+                    <button
+                      key={client.id}
+                      onClick={() => { actions.selectClient(client.id); setPage("clients"); }}
+                      className="w-full flex items-center gap-2.5 p-3 rounded-xl text-left transition"
+                      style={{ background: active ? C.cream : C.bg, border: `1px solid ${active ? C.taupe : "transparent"}` }}
+                    >
+                      <Avatar name={client.name} size={28} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate" style={{ color: C.ink }}>{client.name}</p>
+                        <p className="text-xs truncate" style={{ color: C.charcoal }}>{client.sessionType}{value ? ` • ${formatCurrency(value)}` : ""}</p>
+                      </div>
+                      <ChevronRight size={14} color={C.taupe} />
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function InquiriesPage({ state, actions, setPage }) {
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState("newest");
+
+  const sessionTypes = useMemo(() => Array.from(new Set(state.inquiries.map((entry) => entry.sessionType))), [state.inquiries]);
+
+  const stats = [
+    { key: "all", label: "All", count: state.inquiries.length },
+    { key: "new", label: "New", count: state.inquiries.filter((e) => e.status === "new").length },
+    { key: "approved", label: "Approved", count: state.inquiries.filter((e) => e.status === "approved").length },
+    { key: "converted", label: "Converted", count: state.inquiries.filter((e) => e.status === "converted").length },
+    { key: "lost", label: "Lost", count: state.inquiries.filter((e) => e.status === "lost").length },
+  ];
+
+  const filtered = state.inquiries
+    .filter((entry) => statusFilter === "all" || entry.status === statusFilter)
+    .filter((entry) => typeFilter === "all" || entry.sessionType === typeFilter)
+    .filter((entry) => !query.trim() || entry.name.toLowerCase().includes(query.trim().toLowerCase()))
+    .sort((a, b) => (sort === "newest" ? String(b.receivedAt).localeCompare(String(a.receivedAt)) : String(a.receivedAt).localeCompare(String(b.receivedAt))));
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {stats.map((stat) => (
+          <button key={stat.key} onClick={() => setStatusFilter(stat.key)} className="text-left">
+            <Card className="p-4" style={{ borderColor: statusFilter === stat.key ? C.taupe : C.line }}>
+              <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>{stat.label}</p>
+              <p className="ecc-display text-3xl mt-2" style={{ color: C.ink }}>{stat.count}</p>
+            </Card>
+          </button>
+        ))}
+      </div>
+
+      <Card className="p-4 flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-full flex-1 min-w-[160px]" style={{ background: C.bg }}>
+          <Search size={14} color={C.taupe} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name..." className="bg-transparent outline-none text-sm w-full" style={{ color: C.ink }} />
+        </div>
+        <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="px-3 py-2 rounded-full text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+          <option value="all">All session types</option>
+          {sessionTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+        </select>
+        <select value={sort} onChange={(event) => setSort(event.target.value)} className="px-3 py-2 rounded-full text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </select>
+      </Card>
+
+      <Card className="p-5">
+        <SectionLabel icon={Inbox}>Incoming Leads</SectionLabel>
+        <div className="space-y-3 px-5 pb-5 pt-2">
+          {filtered.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>No inquiries match these filters.</p>}
+          {filtered.map((inquiry) => {
+            const hasClient = Boolean(inquiry.clientId);
+            const Wrapper = hasClient ? "button" : "div";
+            return (
+              <Wrapper
+                key={inquiry.id}
+                onClick={hasClient ? () => { actions.selectClient(inquiry.clientId); setPage("clients"); } : undefined}
+                className="w-full text-left rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3"
+                style={{ background: inquiry.status === "new" ? "#fff8ef" : "#fff", border: `1px solid ${C.line}` }}
+              >
+                <div className="flex items-center gap-3">
+                  <Avatar name={inquiry.name} />
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: hasClient ? C.forest : C.ink, textDecoration: hasClient ? "underline" : "none" }}>{inquiry.name}</p>
+                    <p className="text-xs mt-1" style={{ color: C.charcoal }}>
+                      {inquiry.sessionType} • {inquiry.budgetRange} • {inquiry.receivedAt}
+                    </p>
+                    <p className="text-xs mt-2 max-w-md" style={{ color: C.charcoal }}>{inquiry.notes}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Pill tone={inquiry.status === "new" ? "warn" : inquiry.status === "lost" ? "warn" : "info"}>{inquiry.status}</Pill>
+                  {inquiry.status === "new" && (
+                    <span
+                      onClick={(event) => { event.stopPropagation(); actions.approveInquiry(inquiry.id); }}
+                      className="px-3 py-2 rounded-full text-xs font-medium text-white"
+                      style={{ background: C.forest }}
+                    >
+                      Approve
+                    </span>
+                  )}
+                </div>
+              </Wrapper>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function ClientsPage({ state, selectedBundle, filteredClients, actions, setPage }) {
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [visibleCount, setVisibleCount] = useState(8);
+
+  const withStage = filteredClients.map((client) => ({ client, bundle: getClientBundle(state, client.id) }));
+  const scoped = withStage.filter(({ bundle }) => {
+    if (statusFilter === "all") return true;
+    if (statusFilter === "booked") return bundle.booking.isBooked;
+    if (statusFilter === "active") return !bundle.booking.isBooked && bundle.stage !== "lost" && bundle.stage !== "archived";
+    if (statusFilter === "lost") return bundle.stage === "lost" || bundle.stage === "archived";
+    return true;
+  });
+  const visible = scoped.slice(0, visibleCount);
+
+  const filters = [
+    { key: "all", label: `All (${withStage.length})` },
+    { key: "active", label: "In progress" },
+    { key: "booked", label: "Booked" },
+    { key: "lost", label: "Lost / Archived" },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-[380px_1fr] gap-5">
       <Card className="p-4">
         <SectionLabel icon={Users}>Client Records</SectionLabel>
-        <div className="space-y-2">
-          {filteredClients.map((client) => {
+        <div className="flex gap-1.5 px-5 pb-3 overflow-x-auto ecc-scrollbar">
+          {filters.map((filter) => (
+            <button
+              key={filter.key}
+              onClick={() => { setStatusFilter(filter.key); setVisibleCount(8); }}
+              className="text-xs px-3 py-1.5 rounded-full font-medium shrink-0"
+              style={{ background: statusFilter === filter.key ? C.charcoal : C.bg, color: statusFilter === filter.key ? "#fff" : C.charcoal }}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+        <div className="space-y-1.5 px-1">
+          {visible.map(({ client, bundle }) => {
             const active = client.id === state.selectedClientId;
-            const bundle = getClientBundle(state, client.id);
             return (
               <button
                 key={client.id}
                 onClick={() => actions.selectClient(client.id)}
-                className="w-full p-3 rounded-xl text-left"
+                className="w-full flex items-center gap-2.5 p-2.5 rounded-xl text-left"
                 style={{ background: active ? C.cream : "#fff", border: `1px solid ${active ? C.taupe : C.line}` }}
               >
-                <p className="text-sm font-medium" style={{ color: C.ink }}>{client.name}</p>
-                <p className="text-xs mt-1" style={{ color: C.charcoal }}>{client.sessionType}</p>
+                <Avatar name={client.name} size={30} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate" style={{ color: C.ink }}>{client.name}</p>
+                  <p className="text-xs truncate" style={{ color: C.charcoal }}>{client.sessionType}</p>
+                </div>
                 <Pill tone={bundle.booking.isBooked ? "done" : "info"}>{PIPELINE_LABELS[bundle.stage]}</Pill>
               </button>
             );
           })}
+          {scoped.length === 0 && <p className="text-sm px-3 py-2" style={{ color: C.taupe }}>No clients match this filter.</p>}
         </div>
+        {visibleCount < scoped.length && (
+          <button onClick={() => setVisibleCount((count) => count + 8)} className="w-full mt-3 py-2 rounded-xl text-xs font-medium" style={{ background: C.bg, color: C.charcoal }}>
+            Show more ({scoped.length - visibleCount} remaining)
+          </button>
+        )}
       </Card>
 
       <Card className="p-5">
@@ -458,19 +791,22 @@ function ClientsPage({ state, selectedBundle, filteredClients, actions, setPage 
         ) : (
           <>
             <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
-              <div>
-                <p className="ecc-display text-3xl" style={{ color: C.ink }}>{selectedBundle.client.name}</p>
-                <p className="text-sm mt-1" style={{ color: C.charcoal }}>
-                  {selectedBundle.client.email} • {selectedBundle.client.phone}
-                </p>
+              <div className="flex items-center gap-3">
+                <Avatar name={selectedBundle.client.name} size={44} />
+                <div>
+                  <p className="ecc-display text-3xl leading-tight" style={{ color: C.ink }}>{selectedBundle.client.name}</p>
+                  <p className="text-sm mt-1" style={{ color: C.charcoal }}>
+                    {selectedBundle.client.email} • {selectedBundle.client.phone}
+                  </p>
+                </div>
               </div>
               <StatusLight tone={selectedBundle.booking.isBooked ? "green" : "yellow"} label={selectedBundle.booking.isBooked ? "Booked" : PIPELINE_LABELS[selectedBundle.stage]} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
-              <SummaryChip label="Quotes" value={String(selectedBundle.quotes.length)} />
-              <SummaryChip label="Contracts" value={String(selectedBundle.contracts.length)} />
-              <SummaryChip label="Invoices" value={String(selectedBundle.invoices.length)} />
-              <SummaryChip label="Portal Access" value={selectedBundle.projectStatus.portalAccessSent ? "Sent" : "Pending"} />
+              <SummaryChip label="Quotes" value={String(selectedBundle.quotes.length)} onClick={() => setPage("quotes")} />
+              <SummaryChip label="Contracts" value={String(selectedBundle.contracts.length)} onClick={() => setPage("contracts")} />
+              <SummaryChip label="Invoices" value={String(selectedBundle.invoices.length)} onClick={() => setPage("invoices")} />
+              <SummaryChip label="Portal Access" value={selectedBundle.projectStatus.portalAccessSent ? "Sent" : "Pending"} onClick={() => setPage("emails")} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <ActionCard title="Build quote" body="Create a proposal sourced from your template logic." actionLabel="Open quotes" onClick={() => setPage("quotes")} />
@@ -486,6 +822,17 @@ function ClientsPage({ state, selectedBundle, filteredClients, actions, setPage 
 }
 
 function ProjectsPage({ state, selectedBundle, actions, setPage }) {
+  const [query, setQuery] = useState("");
+  const [bookedOnly, setBookedOnly] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(9);
+
+  const folders = state.clients
+    .map((client) => ({ client, bundle: getClientBundle(state, client.id) }))
+    .filter(({ client }) => !query.trim() || client.name.toLowerCase().includes(query.trim().toLowerCase()))
+    .filter(({ bundle }) => !bookedOnly || bundle.projectStatus.projectCreated);
+
+  const visible = folders.slice(0, visibleCount);
+
   return (
     <div className="space-y-5">
       <Card className="p-5">
@@ -497,9 +844,21 @@ function ProjectsPage({ state, selectedBundle, actions, setPage }) {
           Every client gets a folder. A project only lands inside it once they're actually booked — quote accepted, contract
           signed, payment received. Click a folder to open that client's workspace below.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-5 pb-5">
-          {state.clients.map((client) => {
-            const bundle = getClientBundle(state, client.id);
+        <div className="flex flex-wrap items-center gap-2 px-5 pb-4">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-full flex-1 min-w-[180px]" style={{ background: C.bg }}>
+            <Search size={14} color={C.taupe} />
+            <input value={query} onChange={(event) => { setQuery(event.target.value); setVisibleCount(9); }} placeholder="Search folders by client name..." className="bg-transparent outline-none text-sm w-full" style={{ color: C.ink }} />
+          </div>
+          <button
+            onClick={() => { setBookedOnly((value) => !value); setVisibleCount(9); }}
+            className="text-xs px-3 py-2 rounded-full font-medium shrink-0"
+            style={{ background: bookedOnly ? C.forest : C.bg, color: bookedOnly ? "#fff" : C.charcoal }}
+          >
+            Booked projects only
+          </button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-5 pb-3">
+          {visible.map(({ client, bundle }) => {
             const isOpen = client.id === state.selectedClientId;
             return (
               <button key={client.id} onClick={() => actions.selectClient(client.id)} className="text-left">
@@ -516,7 +875,13 @@ function ProjectsPage({ state, selectedBundle, actions, setPage }) {
               </button>
             );
           })}
+          {folders.length === 0 && <p className="text-sm px-1" style={{ color: C.taupe }}>No folders match this search.</p>}
         </div>
+        {visibleCount < folders.length && (
+          <button onClick={() => setVisibleCount((count) => count + 9)} className="mx-5 mb-5 px-4 py-2 rounded-full text-xs font-medium" style={{ background: C.bg, color: C.charcoal }}>
+            Show more ({folders.length - visibleCount} remaining)
+          </button>
+        )}
       </Card>
 
       <ProjectWorkspaceCard selectedBundle={selectedBundle} actions={actions} setPage={setPage} />
@@ -538,7 +903,7 @@ function ProjectWorkspaceCard({ selectedBundle, actions, setPage }) {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-5">
       <div className="space-y-5">
-        <BookingChecklistCard selectedBundle={selectedBundle} />
+        <BookingChecklistCard selectedBundle={selectedBundle} setPage={setPage} />
         <Card className="p-5">
           <SectionLabel icon={ClipboardList}>Project Creation Gate</SectionLabel>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -608,11 +973,44 @@ function ProjectWorkspaceCard({ selectedBundle, actions, setPage }) {
   );
 }
 
-function QuotesPage({ state, selectedBundle, actions }) {
+function RecordTrail({ selectedBundle, current, setPage }) {
+  if (!selectedBundle.client) return null;
+  const items = [
+    { key: "inquiries", label: "Inquiry", exists: Boolean(selectedBundle.inquiry) },
+    { key: "quotes", label: "Quote", exists: Boolean(selectedBundle.primaryQuote) },
+    { key: "contracts", label: "Contract", exists: Boolean(selectedBundle.primaryContract) },
+    { key: "invoices", label: "Invoice", exists: Boolean(selectedBundle.primaryInvoice) },
+    { key: "sessions", label: "Session", exists: Boolean(selectedBundle.session) },
+  ];
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap mb-4">
+      {items.map((item, index) => (
+        <React.Fragment key={item.key}>
+          {index > 0 && <ChevronRight size={12} color={C.taupe} />}
+          <button
+            disabled={item.key === current || !item.exists}
+            onClick={() => setPage(item.key)}
+            className="text-xs px-2.5 py-1 rounded-full font-medium disabled:opacity-100"
+            style={{
+              background: item.key === current ? C.forest : item.exists ? C.cream : "transparent",
+              color: item.key === current ? "#fff" : item.exists ? C.ink : C.taupe,
+              cursor: item.key === current || !item.exists ? "default" : "pointer",
+            }}
+          >
+            {item.label}
+          </button>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+function QuotesPage({ state, selectedBundle, actions, setPage }) {
   const quote = selectedBundle.primaryQuote;
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-5">
+    <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-5">
       <Card className="p-4">
         <SectionLabel icon={FileText}>Quotes</SectionLabel>
         <button onClick={() => selectedBundle.client && actions.createQuote(selectedBundle.client.id)} className="w-full mb-3 px-4 py-3 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>
@@ -632,129 +1030,272 @@ function QuotesPage({ state, selectedBundle, actions }) {
       {!quote ? (
         <EmptyState title="No quote yet" body="Select a client and draft the first connected quote from their inquiry and package." />
       ) : (
-        <div className="grid grid-cols-1 2xl:grid-cols-[1.08fr_0.92fr] gap-5">
-          <Card className="p-5">
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div>
-                <p className="ecc-display text-3xl" style={{ color: C.ink }}>{quote.number}</p>
-                <p className="text-sm mt-1" style={{ color: C.charcoal }}>{selectedBundle.client?.name} • {selectedBundle.client?.sessionType}</p>
-              </div>
+        <Card className="p-6 sm:p-8">
+          <RecordTrail selectedBundle={selectedBundle} current="quotes" setPage={setPage} />
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div>
+              <p className="ecc-display text-4xl" style={{ color: C.ink }}>{quote.number}</p>
+              <p className="text-sm mt-1" style={{ color: C.charcoal }}>{selectedBundle.client?.name} • {selectedBundle.client?.sessionType}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
               <Pill tone={statusTone(quote.status)}>{quote.status}</Pill>
+              <button onClick={() => setPreviewOpen(true)} className="px-3 py-2 rounded-full text-xs font-medium flex items-center gap-1.5" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+                <Eye size={13} /> Preview
+              </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-              <Field label="Session date" value={quote.sessionDate} onChange={(value) => actions.patchQuote(quote.id, { sessionDate: value })} />
-              <Field label="Location" value={quote.location} onChange={(value) => actions.patchQuote(quote.id, { location: value })} />
-              <Field label="Expiration" value={quote.expirationDate} onChange={(value) => actions.patchQuote(quote.id, { expirationDate: value })} />
-              <Field label="Discount" type="number" value={quote.discount} onChange={(value) => actions.patchQuote(quote.id, { discount: Number(value || 0) })} />
-            </div>
-            <textarea rows={3} value={quote.notes || ""} onChange={(event) => actions.patchQuote(quote.id, { notes: event.target.value })} className="w-full rounded-2xl p-3 text-sm outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
-            <div className="space-y-3 mt-5">
-              {quote.lineItems.map((item) => (
-                <div key={item.id} className="grid grid-cols-1 md:grid-cols-[1fr_1.2fr_110px_130px_40px] gap-2 items-center">
-                  <Field compact value={item.name} onChange={(value) => actions.patchQuoteItem(quote.id, item.id, { name: value })} />
-                  <Field compact value={item.description} onChange={(value) => actions.patchQuoteItem(quote.id, item.id, { description: value })} />
-                  <Field compact type="number" value={item.quantity} onChange={(value) => actions.patchQuoteItem(quote.id, item.id, { quantity: Number(value || 0) })} />
-                  <Field compact type="number" value={item.unitPrice} onChange={(value) => actions.patchQuoteItem(quote.id, item.id, { unitPrice: Number(value || 0) })} />
-                  <button onClick={() => actions.removeQuoteItem(quote.id, item.id)} className="h-10 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.red }}>x</button>
-                </div>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2 mt-4">
-              <button onClick={() => actions.addQuoteItem(quote.id)} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: C.cream, color: C.ink }}>Add line item</button>
-              <button onClick={() => actions.sendQuote(quote.id)} className="px-3 py-2 rounded-full text-xs font-medium text-white" style={{ background: C.forest }}>Send quote</button>
-              <button onClick={() => actions.viewQuote(quote.id)} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: "#edf2f5", color: C.blue }}>Mark viewed</button>
-              <button onClick={() => actions.acceptQuote(quote.id)} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: "#eaf1ee", color: C.forest }}>Accept</button>
-              <button onClick={() => actions.declineQuote(quote.id)} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: "#f8ece8", color: C.red }}>Decline</button>
-            </div>
-          </Card>
+          </div>
+          <p className="ecc-display text-2xl mt-4" style={{ color: C.ink }}>{formatCurrency(quote.total)}</p>
 
-          <Card className="p-5">
-            <p className="text-[10px] uppercase tracking-[0.3em]" style={{ color: C.taupe }}>Quote Preview</p>
-            <p className="ecc-display text-4xl mt-2" style={{ color: C.ink }}>{quote.number}</p>
-            <p className="text-sm mt-2" style={{ color: C.charcoal }}>{selectedBundle.client?.name} • {quote.eventType}</p>
-            <div className="mt-6 space-y-3">
-              {quote.lineItems.map((item) => (
-                <div key={item.id} className="flex items-start justify-between gap-3 pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
-                  <div>
-                    <p className="text-sm font-medium" style={{ color: C.ink }}>{item.name}</p>
-                    <p className="text-xs mt-1" style={{ color: C.charcoal }}>{item.description}</p>
-                  </div>
-                  <p className="text-sm" style={{ color: C.ink }}>{formatCurrency(item.quantity * item.unitPrice)}</p>
+          <div className="h-px my-6" style={{ background: C.line }} />
+
+          <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Session Details</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <Field label="Session date" value={quote.sessionDate} onChange={(value) => actions.patchQuote(quote.id, { sessionDate: value })} />
+            <Field label="Location" value={quote.location} onChange={(value) => actions.patchQuote(quote.id, { location: value })} />
+            <Field label="Expiration" value={quote.expirationDate} onChange={(value) => actions.patchQuote(quote.id, { expirationDate: value })} />
+            <Field label="Discount" type="number" value={quote.discount} onChange={(value) => actions.patchQuote(quote.id, { discount: Number(value || 0) })} />
+          </div>
+
+          <p className="text-[10px] uppercase tracking-[0.25em] mb-2" style={{ color: C.taupe }}>Notes to client</p>
+          <textarea rows={3} value={quote.notes || ""} onChange={(event) => actions.patchQuote(quote.id, { notes: event.target.value })} className="w-full rounded-2xl p-4 text-sm outline-none mb-6" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Line Items</p>
+            <span className="text-xs hidden sm:inline" style={{ color: C.taupe }}>Item / Description / Qty / Price / Optional</span>
+          </div>
+          <div className="space-y-3 mb-4">
+            {quote.lineItems.map((item) => (
+              <div key={item.id} className="rounded-2xl p-4" style={{ border: `1px solid ${C.line}` }}>
+                <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1.4fr_90px_120px] gap-3 items-start">
+                  <Field compact label="Item" value={item.name} onChange={(value) => actions.patchQuoteItem(quote.id, item.id, { name: value })} />
+                  <Field compact label="Description" value={item.description} onChange={(value) => actions.patchQuoteItem(quote.id, item.id, { description: value })} />
+                  <Field compact label="Qty" type="number" value={item.quantity} onChange={(value) => actions.patchQuoteItem(quote.id, item.id, { quantity: Number(value || 0) })} />
+                  <Field compact label="Unit price" type="number" value={item.unitPrice} onChange={(value) => actions.patchQuoteItem(quote.id, item.id, { unitPrice: Number(value || 0) })} />
                 </div>
-              ))}
-            </div>
-            <div className="space-y-2 mt-6 text-sm">
-              <PriceRow label="Subtotal" value={formatCurrency(quote.subtotal)} />
-              <PriceRow label="Discount" value={formatCurrency(quote.discount)} />
-              <PriceRow label="Tax" value={formatCurrency(quote.tax)} />
-              <PriceRow strong label="Total" value={formatCurrency(quote.total)} />
-            </div>
-          </Card>
-        </div>
+                <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+                  <button
+                    onClick={() => actions.patchQuoteItem(quote.id, item.id, { optional: !item.optional })}
+                    className="text-xs px-2.5 py-1 rounded-full font-medium"
+                    style={{ background: item.optional ? "#fbf1e6" : C.bg, color: item.optional ? "#9a6b2f" : C.taupe }}
+                  >
+                    {item.optional ? "Optional add-on for client" : "Mark as optional add-on"}
+                  </button>
+                  <button onClick={() => actions.removeQuoteItem(quote.id, item.id)} className="text-xs" style={{ color: C.red }}>Remove</button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 mb-6">
+            <button onClick={() => actions.addQuoteItem(quote.id)} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: C.cream, color: C.ink }}>+ Blank item</button>
+            <CatalogPicker label="+ Add package" options={state.packages} onPick={(pkg) => actions.addQuoteCatalogItem(quote.id, { name: pkg.name, description: pkg.description, unitPrice: pkg.price })} />
+            <CatalogPicker label="+ Add addon" options={state.addons} onPick={(addon) => actions.addQuoteCatalogItem(quote.id, { name: addon.name, description: addon.description, unitPrice: addon.price, optional: true })} />
+            <span className="text-xs" style={{ color: C.taupe }}>Client-must-pick-one bundles are next on the roadmap — for now, mark choices as optional add-ons.</span>
+          </div>
+
+          <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Actions</p>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => actions.sendQuote(quote.id)} className="px-4 py-2.5 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>Send quote</button>
+            <button onClick={() => actions.viewQuote(quote.id)} className="px-4 py-2.5 rounded-full text-sm font-medium" style={{ background: "#edf2f5", color: C.blue }}>Mark viewed</button>
+            <button onClick={() => actions.acceptQuote(quote.id)} className="px-4 py-2.5 rounded-full text-sm font-medium" style={{ background: "#eaf1ee", color: C.forest }}>Accept</button>
+            <button onClick={() => actions.declineQuote(quote.id)} className="px-4 py-2.5 rounded-full text-sm font-medium" style={{ background: "#f8ece8", color: C.red }}>Decline</button>
+            {quote.status === "accepted" && (
+              <button onClick={() => setPage("contracts")} className="px-4 py-2.5 rounded-full text-sm font-medium flex items-center gap-1" style={{ background: C.charcoal, color: "#fff" }}>
+                {selectedBundle.primaryContract ? "View contract" : "Generate contract"} <ChevronRight size={12} />
+              </button>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {previewOpen && quote && (
+        <Modal onClose={() => setPreviewOpen(false)} title="Quote Preview">
+          <p className="text-[10px] uppercase tracking-[0.3em]" style={{ color: C.taupe }}>{selectedBundle.client?.name}</p>
+          <p className="ecc-display text-4xl mt-2" style={{ color: C.ink }}>{quote.number}</p>
+          <p className="text-sm mt-2" style={{ color: C.charcoal }}>{quote.eventType}</p>
+          <div className="mt-6 space-y-3">
+            {quote.lineItems.map((item) => (
+              <div key={item.id} className="flex items-start justify-between gap-3 pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+                <div>
+                  <p className="text-sm font-medium" style={{ color: C.ink }}>{item.name} {item.optional && <span className="text-xs" style={{ color: C.taupe }}>(optional)</span>}</p>
+                  <p className="text-xs mt-1" style={{ color: C.charcoal }}>{item.description}</p>
+                </div>
+                <p className="text-sm shrink-0" style={{ color: C.ink }}>{formatCurrency(item.quantity * item.unitPrice)}</p>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-2 mt-6 text-sm">
+            <PriceRow label="Subtotal" value={formatCurrency(quote.subtotal)} />
+            <PriceRow label="Discount" value={formatCurrency(quote.discount)} />
+            <PriceRow label="Tax" value={formatCurrency(quote.tax)} />
+            <PriceRow strong label="Total" value={formatCurrency(quote.total)} />
+          </div>
+        </Modal>
       )}
     </div>
   );
 }
 
-function ContractsPage({ selectedBundle, actions }) {
+function Modal({ onClose, title, children }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto ecc-scrollbar rounded-2xl p-6" style={{ background: "#fff" }} onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>{title}</p>
+          <button onClick={onClose}><X size={18} color={C.charcoal} /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CatalogPicker({ label, options, onPick }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((value) => !value)} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: "#edf2f5", color: C.blue }}>
+        {label}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full mt-1 w-64 rounded-2xl shadow-lg z-40 py-1" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+            {options.map((option) => (
+              <button
+                key={option.id}
+                onClick={() => { onPick(option); setOpen(false); }}
+                className="w-full text-left px-3 py-2.5 text-sm"
+              >
+                <p style={{ color: C.ink }}>{option.name}</p>
+                <p className="text-xs" style={{ color: C.taupe }}>{formatCurrency(option.price)}</p>
+              </button>
+            ))}
+            {options.length === 0 && <p className="px-3 py-2 text-xs" style={{ color: C.taupe }}>None set up yet.</p>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ContractsPage({ selectedBundle, actions, setPage }) {
   const contract = selectedBundle.primaryContract;
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[0.9fr_1.1fr] gap-5">
+    <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-5">
       <Card className="p-5">
         <SectionLabel icon={FileSignature}>Contract Controls</SectionLabel>
         <p className="text-sm mb-4" style={{ color: C.charcoal }}>
           Contracts only unlock after a quote is accepted. Signing the contract still does not create a project until payment is in.
         </p>
-        <button onClick={() => selectedBundle.client && actions.createContract(selectedBundle.client.id)} className="px-4 py-3 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>
+        {selectedBundle.primaryQuote && (
+          <button onClick={() => setPage("quotes")} className="text-xs underline mb-3 inline-block" style={{ color: C.forest }}>
+            ← View source quote {selectedBundle.primaryQuote.number}
+          </button>
+        )}
+        <button onClick={() => selectedBundle.client && actions.createContract(selectedBundle.client.id)} className="px-4 py-3 rounded-xl text-sm font-medium text-white block" style={{ background: C.forest }}>
           Generate contract
         </button>
         {contract && (
           <div className="mt-5 space-y-3">
-            <SummaryChip label="Contract" value={contract.number} />
-            <SummaryChip label="Template" value={contract.templateName} />
+            <SummaryChip label="Contract No." value={contract.number} />
+            <SummaryChip label="Template" value={contract.templateName} onClick={() => setPage("templates")} />
             <SummaryChip label="Status" value={contract.status} />
+            <SummaryChip label="Drafted" value={contract.createdAt} />
             <div className="flex flex-wrap gap-2">
               <button onClick={() => actions.sendContract(contract.id)} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: "#edf2f5", color: C.blue }}>
-                Send
+                Send for signature
               </button>
               <button onClick={() => actions.signContract(contract.id)} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: "#eaf1ee", color: C.forest }}>
                 Mark signed
               </button>
+              {contract.status === "signed" && (
+                <button onClick={() => setPage("invoices")} className="px-3 py-2 rounded-full text-xs font-medium flex items-center gap-1" style={{ background: C.charcoal, color: "#fff" }}>
+                  {selectedBundle.primaryInvoice ? "View invoice" : "Create invoice"} <ChevronRight size={12} />
+                </button>
+              )}
             </div>
           </div>
         )}
       </Card>
 
-      <Card className="p-5">
-        {!contract ? (
-          <EmptyState title="No contract yet" body="Approve the quote first, then generate a contract tied to that accepted proposal." />
-        ) : (
-          <>
-            <p className="ecc-display text-4xl" style={{ color: C.ink }}>{contract.number}</p>
-            <p className="text-sm mt-2" style={{ color: C.charcoal }}>{selectedBundle.client?.name} • {contract.templateName}</p>
-            <div className="mt-6 rounded-2xl p-5" style={{ background: C.bg }}>
-              <p className="text-sm leading-7" style={{ color: C.ink }}>
-                This contract confirms creative coverage, payment timing, rescheduling terms, usage rights, and delivery expectations for the selected session.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-5">
-                <SummaryChip label="Created" value={contract.createdAt} />
-                <SummaryChip label="Signed" value={contract.signedAt || "Awaiting"} />
+      {!contract ? (
+        <EmptyState title="No contract yet" body="Approve the quote first, then generate a contract tied to that accepted proposal." />
+      ) : (
+        <Card className="p-0 overflow-hidden">
+          <div className="px-6 pt-5">
+            <RecordTrail selectedBundle={selectedBundle} current="contracts" setPage={setPage} />
+          </div>
+          <div className="px-8 sm:px-14 pt-2 pb-12" style={{ background: "#fffdf9" }}>
+            <div className="text-center mb-10">
+              <p className="text-[10px] uppercase tracking-[0.4em] mb-3" style={{ color: C.taupe }}>EC Creative Studios</p>
+              <p className="ecc-display text-4xl" style={{ color: C.ink }}>{contract.templateName}</p>
+              <p className="text-xs mt-2" style={{ color: C.charcoal }}>Contract No. {contract.number} · Drafted {contract.createdAt}</p>
+              <span className="inline-block mt-3">
+                <Pill tone={statusTone(contract.status)}>{contract.status}</Pill>
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10 pb-8" style={{ borderBottom: `1px solid ${C.line}` }}>
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.25em] mb-1" style={{ color: C.taupe }}>Photographer</p>
+                <p className="ecc-display text-xl" style={{ color: C.ink }}>EC Creative Studios</p>
+                <p className="text-xs mt-1" style={{ color: C.charcoal }}>Dallas–Fort Worth, TX</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.25em] mb-1" style={{ color: C.taupe }}>Client</p>
+                <p className="ecc-display text-xl" style={{ color: C.ink }}>{selectedBundle.client?.name}</p>
+                <p className="text-xs mt-1" style={{ color: C.charcoal }}>{selectedBundle.client?.email} · {selectedBundle.client?.sessionType}</p>
               </div>
             </div>
-          </>
-        )}
-      </Card>
+
+            <div className="space-y-7">
+              {(contract.clauses || []).map((clause) => (
+                <div key={clause.id}>
+                  <p className="ecc-display text-lg mb-1.5" style={{ color: C.ink }}>{clause.title}</p>
+                  <textarea
+                    rows={3}
+                    value={clause.body}
+                    onChange={(event) => actions.patchContract(contract.id, { clauses: contract.clauses.map((entry) => (entry.id === clause.id ? { ...entry, body: event.target.value } : entry)) })}
+                    className="w-full text-sm leading-7 outline-none resize-none bg-transparent"
+                    style={{ color: C.charcoal, fontFamily: "inherit" }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-10 mt-14 pt-10" style={{ borderTop: `1px solid ${C.line}` }}>
+              <div>
+                <div className="h-10 flex items-end" style={{ borderBottom: `1px solid ${C.ink}` }}>
+                  <p className="ecc-display text-2xl italic" style={{ color: contract.status === "signed" ? C.ink : C.line }}>
+                    {contract.signerName || ""}
+                  </p>
+                </div>
+                <p className="text-xs mt-2" style={{ color: C.taupe }}>Client signature · {contract.signedAt || "Awaiting signature"}</p>
+              </div>
+              <div>
+                <div className="h-10 flex items-end" style={{ borderBottom: `1px solid ${C.ink}` }}>
+                  <p className="ecc-display text-2xl italic" style={{ color: C.ink }}>EC Creative Studios</p>
+                </div>
+                <p className="text-xs mt-2" style={{ color: C.taupe }}>Photographer · {contract.createdAt}</p>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
 
-function InvoicesPage({ state, selectedBundle, actions }) {
+function InvoicesPage({ state, selectedBundle, actions, setPage }) {
   const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("Card");
+  const [previewOpen, setPreviewOpen] = useState(false);
   const invoice = selectedBundle.primaryInvoice;
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-5">
+    <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-5">
       <Card className="p-4">
         <SectionLabel icon={Receipt}>Invoices</SectionLabel>
         <div className="flex flex-col gap-2 mb-4">
@@ -782,90 +1323,247 @@ function InvoicesPage({ state, selectedBundle, actions }) {
       {!invoice ? (
         <EmptyState title="No invoice selected" body="Create the next invoice from the signed contract or select an existing invoice to track payment." />
       ) : (
-        <Card className="p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+        <Card className="p-6 sm:p-8">
+          <RecordTrail selectedBundle={selectedBundle} current="invoices" setPage={setPage} />
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
             <div>
               <p className="ecc-display text-4xl" style={{ color: C.ink }}>{invoice.number}</p>
               <p className="text-sm mt-1" style={{ color: C.charcoal }}>{selectedBundle.client?.name} • {invoice.kind}</p>
             </div>
-            <Pill tone={statusTone(invoice.status)}>{invoice.status}</Pill>
+            <div className="flex items-center gap-2 shrink-0">
+              <Pill tone={statusTone(invoice.status)}>{invoice.status}</Pill>
+              <button onClick={() => setPreviewOpen(true)} className="px-3 py-2 rounded-full text-xs font-medium flex items-center gap-1.5" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+                <Eye size={13} /> Preview
+              </button>
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
+
+          <div className="h-px my-6" style={{ background: C.line }} />
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
             <SummaryChip label="Total" value={formatCurrency(invoice.total)} />
-            <SummaryChip label="Paid" value={formatCurrency(invoice.amountPaid)} />
+            <SummaryChip label="Paid" value={formatCurrency(invoice.amountPaid)} onClick={() => setPage("payments")} />
             <SummaryChip label="Balance" value={formatCurrency(invoice.balanceDue)} />
-            <SummaryChip label="Due" value={invoice.dueDate || "TBD"} />
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.25em] mb-1" style={{ color: C.taupe }}>Due date</p>
+              <input type="date" value={invoice.dueDate || ""} onChange={(event) => actions.patchInvoice(invoice.id, { dueDate: event.target.value })} className="w-full rounded-2xl px-3 py-2.5 text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink, background: "#fff" }} />
+            </div>
           </div>
-          <div className="space-y-3 mb-5">
+
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Line Items</p>
+          </div>
+          <div className="space-y-3 mb-4">
             {invoice.lineItems.map((item) => (
-              <div key={item.id} className="flex items-center justify-between pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+              <div key={item.id} className="rounded-2xl p-4" style={{ border: `1px solid ${C.line}` }}>
+                <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1.4fr_90px_120px] gap-3 items-start">
+                  <Field compact label="Item" value={item.name} onChange={(value) => actions.patchInvoiceItem(invoice.id, item.id, { name: value })} />
+                  <Field compact label="Description" value={item.description} onChange={(value) => actions.patchInvoiceItem(invoice.id, item.id, { description: value })} />
+                  <Field compact label="Qty" type="number" value={item.quantity} onChange={(value) => actions.patchInvoiceItem(invoice.id, item.id, { quantity: Number(value || 0) })} />
+                  <Field compact label="Unit price" type="number" value={item.unitPrice} onChange={(value) => actions.patchInvoiceItem(invoice.id, item.id, { unitPrice: Number(value || 0) })} />
+                </div>
+                <div className="flex items-center justify-end mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+                  <button onClick={() => actions.removeInvoiceItem(invoice.id, item.id)} className="text-xs" style={{ color: C.red }}>Remove</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 mb-7">
+            <button onClick={() => actions.addInvoiceItem(invoice.id)} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: C.cream, color: C.ink }}>+ Blank item</button>
+            <CatalogPicker label="+ Add package" options={state.packages} onPick={(pkg) => actions.addInvoiceCatalogItem(invoice.id, { name: pkg.name, description: pkg.description, unitPrice: pkg.price })} />
+            <span className="text-xs" style={{ color: C.taupe }}>Packages add as a new item below — edit the price to match what was actually billed.</span>
+          </div>
+
+          <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Send &amp; Collect</p>
+          <div className="flex flex-wrap items-center gap-2 mb-6">
+            <button onClick={() => actions.sendInvoice(invoice.id)} className="px-4 py-2.5 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>
+              Send invoice
+            </button>
+            <button onClick={() => actions.sendBookingReminder(selectedBundle.client.id)} className="px-4 py-2.5 rounded-full text-sm font-medium" style={{ background: "#f8ece8", color: C.red }}>
+              Send not-booked reminder
+            </button>
+            {invoice.balanceDue <= 0 && (
+              <button onClick={() => setPage("projects")} className="px-4 py-2.5 rounded-full text-sm font-medium flex items-center gap-1" style={{ background: C.charcoal, color: "#fff" }}>
+                Paid — open project <ChevronRight size={12} />
+              </button>
+            )}
+          </div>
+
+          <div className="rounded-2xl p-4 flex flex-wrap items-end gap-3" style={{ background: C.bg }}>
+            <Field compact label="Payment amount" type="number" value={paymentAmount} onChange={setPaymentAmount} />
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.25em] mb-1.5" style={{ color: C.taupe }}>Method</p>
+              <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="px-3 py-2.5 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+                {["Card", "Zelle", "Cash", "Check", "Stripe"].map((method) => <option key={method}>{method}</option>)}
+              </select>
+            </div>
+            <button onClick={() => { actions.recordPayment(invoice.id, Number(paymentAmount || 0), paymentMethod); setPaymentAmount(""); }} className="px-4 py-2.5 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>
+              Apply payment
+            </button>
+          </div>
+
+          <p className="text-[10px] uppercase tracking-[0.25em] mt-6 mb-2" style={{ color: C.taupe }}>Internal notes</p>
+          <textarea rows={3} value={invoice.internalNotes || ""} onChange={(event) => actions.patchInvoice(invoice.id, { internalNotes: event.target.value })} className="w-full rounded-2xl p-3 text-sm outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+        </Card>
+      )}
+
+      {previewOpen && invoice && (
+        <Modal onClose={() => setPreviewOpen(false)} title="Invoice Preview">
+          <p className="text-[10px] uppercase tracking-[0.3em]" style={{ color: C.taupe }}>{selectedBundle.client?.name}</p>
+          <p className="ecc-display text-4xl mt-2" style={{ color: C.ink }}>{invoice.number}</p>
+          <p className="text-sm mt-2" style={{ color: C.charcoal }}>{invoice.kind} invoice · Due {invoice.dueDate || "TBD"}</p>
+          <div className="mt-6 space-y-3">
+            {invoice.lineItems.map((item) => (
+              <div key={item.id} className="flex items-start justify-between gap-3 pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
                 <div>
                   <p className="text-sm font-medium" style={{ color: C.ink }}>{item.name}</p>
                   <p className="text-xs mt-1" style={{ color: C.charcoal }}>{item.description}</p>
                 </div>
-                <p className="text-sm" style={{ color: C.ink }}>{formatCurrency(item.quantity * item.unitPrice)}</p>
+                <p className="text-sm shrink-0" style={{ color: C.ink }}>{formatCurrency(item.quantity * item.unitPrice)}</p>
               </div>
             ))}
           </div>
-          <div className="flex flex-wrap gap-2 mb-5">
-            <button onClick={() => actions.sendInvoice(invoice.id)} className="px-3 py-2 rounded-full text-xs font-medium text-white" style={{ background: C.forest }}>
-              Send invoice
-            </button>
-            <button onClick={() => actions.sendBookingReminder(selectedBundle.client.id)} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: "#f8ece8", color: C.red }}>
-              Send not-booked reminder
-            </button>
-            <Field compact label="Payment amount" type="number" value={paymentAmount} onChange={setPaymentAmount} />
-            <button onClick={() => { actions.recordPayment(invoice.id, Number(paymentAmount || 0), "Manual"); setPaymentAmount(""); }} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: "#eaf1ee", color: C.forest }}>
-              Apply payment
-            </button>
+          <div className="space-y-2 mt-6 text-sm">
+            <PriceRow label="Subtotal" value={formatCurrency(invoice.subtotal)} />
+            <PriceRow label="Tax" value={formatCurrency(invoice.tax)} />
+            <PriceRow label="Paid" value={formatCurrency(invoice.amountPaid)} />
+            <PriceRow strong label="Balance due" value={formatCurrency(invoice.balanceDue)} />
           </div>
-          <textarea rows={3} value={invoice.internalNotes || ""} onChange={(event) => actions.patchInvoice(invoice.id, { internalNotes: event.target.value })} className="w-full rounded-2xl p-3 text-sm outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
-        </Card>
+        </Modal>
       )}
     </div>
   );
 }
 
-function PaymentsPage({ state, selectedBundle, actions }) {
+function PaymentsPage({ state, selectedBundle, actions, setPage }) {
+  const [amount, setAmount] = useState("");
+  const [method, setMethod] = useState("Card");
+  const [targetInvoiceId, setTargetInvoiceId] = useState("");
+  const [receipt, setReceipt] = useState(null);
+
+  const methodTotals = useMemo(() => {
+    const totals = {};
+    state.payments.forEach((payment) => { totals[payment.method] = (totals[payment.method] || 0) + payment.amount; });
+    return Object.entries(totals);
+  }, [state.payments]);
+
+  const unpaidInvoices = selectedBundle.invoices.filter((invoice) => invoice.balanceDue > 0);
+  const effectiveInvoiceId = targetInvoiceId || unpaidInvoices[0]?.id || "";
+
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[0.9fr_1.1fr] gap-5">
-      <Card className="p-5">
-        <SectionLabel icon={CreditCard}>Payment Ledger</SectionLabel>
-        <div className="space-y-3">
-          {state.payments.map((payment) => (
-            <div key={payment.id} className="rounded-xl p-3" style={{ background: C.bg }}>
-              <p className="text-sm font-medium" style={{ color: C.ink }}>{formatCurrency(payment.amount)}</p>
-              <p className="text-xs mt-1" style={{ color: C.charcoal }}>{getClientBundle(state, payment.clientId).client?.name} • {payment.method}</p>
-              <p className="text-xs mt-1" style={{ color: C.taupe }}>{payment.paidAt}</p>
-            </div>
-          ))}
-        </div>
-      </Card>
-      <Card className="p-5">
-        <SectionLabel icon={ClipboardList}>Client Balance Snapshot</SectionLabel>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
-          <SummaryChip label="Client" value={selectedBundle.client?.name || "—"} />
-          <SummaryChip label="Outstanding" value={formatCurrency(selectedBundle.invoices.reduce((sum, entry) => sum + entry.balanceDue, 0))} />
-          <SummaryChip label="Payments logged" value={String(selectedBundle.payments.length)} />
-          <SummaryChip label="Booked" value={selectedBundle.booking.isBooked ? "Yes" : "No"} />
-        </div>
-        <div className="space-y-2">
-          {selectedBundle.invoices.map((invoice) => (
-            <button key={invoice.id} onClick={() => actions.recordPayment(invoice.id, invoice.balanceDue, "Manual")} className="w-full flex items-center justify-between p-3 rounded-xl text-left" style={{ border: `1px solid ${C.line}` }}>
-              <div>
-                <p className="text-sm font-medium" style={{ color: C.ink }}>{invoice.number}</p>
-                <p className="text-xs mt-1" style={{ color: C.charcoal }}>{invoice.status}</p>
+      <div className="space-y-5">
+        <Card className="p-5">
+          <SectionLabel icon={CreditCard}>By Method</SectionLabel>
+          <div className="grid grid-cols-2 gap-3 px-5 pb-5">
+            {methodTotals.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>No payments logged yet.</p>}
+            {methodTotals.map(([m, total]) => (
+              <div key={m} className="rounded-xl p-3" style={{ border: `1px solid ${C.line}` }}>
+                <p className="ecc-display text-2xl" style={{ color: C.ink }}>{formatCurrency(total)}</p>
+                <p className="text-xs" style={{ color: C.charcoal }}>{m}</p>
               </div>
-              <span className="text-sm" style={{ color: C.forest }}>Apply {formatCurrency(invoice.balanceDue)}</span>
-            </button>
-          ))}
-        </div>
-      </Card>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <SectionLabel icon={CreditCard}>Payment Ledger</SectionLabel>
+          <div className="space-y-2 px-5 pb-5">
+            {state.payments.map((payment) => (
+              <button key={payment.id} onClick={() => setReceipt(payment)} className="w-full text-left flex items-center justify-between rounded-xl p-3" style={{ background: C.bg }}>
+                <div>
+                  <p className="text-sm font-medium" style={{ color: C.ink }}>{formatCurrency(payment.amount)}</p>
+                  <p className="text-xs mt-1" style={{ color: C.charcoal }}>{getClientBundle(state, payment.clientId).client?.name} • {payment.method}</p>
+                </div>
+                <p className="text-xs" style={{ color: C.taupe }}>{payment.paidAt}</p>
+              </button>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <div className="space-y-5">
+        <Card className="p-5">
+          <SectionLabel icon={ClipboardList}>Client Balance Snapshot</SectionLabel>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4 px-5">
+            <SummaryChip label="Client" value={selectedBundle.client?.name || "—"} onClick={() => setPage && setPage("clients")} />
+            <SummaryChip label="Outstanding" value={formatCurrency(selectedBundle.invoices.reduce((sum, entry) => sum + entry.balanceDue, 0))} onClick={() => setPage && setPage("invoices")} />
+            <SummaryChip label="Payments logged" value={String(selectedBundle.payments.length)} />
+            <SummaryChip label="Booked" value={selectedBundle.booking.isBooked ? "Yes" : "No"} onClick={() => setPage && setPage("projects")} />
+          </div>
+
+          {!selectedBundle.client ? (
+            <p className="text-sm px-5" style={{ color: C.taupe }}>Select a client to record a payment.</p>
+          ) : unpaidInvoices.length === 0 ? (
+            <p className="text-sm px-5" style={{ color: C.taupe }}>Nothing outstanding for this client.</p>
+          ) : (
+            <div className="px-5 pb-2 space-y-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.25em] mb-1.5" style={{ color: C.taupe }}>Invoice</p>
+                <select value={effectiveInvoiceId} onChange={(event) => setTargetInvoiceId(event.target.value)} className="w-full px-3 py-2.5 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+                  {unpaidInvoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.number} — {formatCurrency(invoice.balanceDue)} due</option>)}
+                </select>
+              </div>
+              <div className="flex flex-wrap items-end gap-2">
+                <Field compact label="Amount" type="number" value={amount} onChange={setAmount} />
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.25em] mb-1.5" style={{ color: C.taupe }}>Method</p>
+                  <select value={method} onChange={(event) => setMethod(event.target.value)} className="px-3 py-2.5 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+                    {["Card", "Zelle", "Cash", "Check", "Stripe"].map((m) => <option key={m}>{m}</option>)}
+                  </select>
+                </div>
+                <button
+                  onClick={() => {
+                    const invoice = unpaidInvoices.find((entry) => entry.id === effectiveInvoiceId);
+                    if (!invoice) return;
+                    actions.recordPayment(invoice.id, Number(amount || invoice.balanceDue), method);
+                    setAmount("");
+                  }}
+                  className="px-4 py-2.5 rounded-full text-sm font-medium text-white"
+                  style={{ background: C.forest }}
+                >
+                  Record payment
+                </button>
+              </div>
+              <p className="text-xs" style={{ color: C.taupe }}>Leave amount blank to apply the full remaining balance.</p>
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-5">
+          <SectionLabel icon={Receipt}>Open Invoices</SectionLabel>
+          <div className="space-y-2 px-5 pb-5">
+            {selectedBundle.invoices.map((invoice) => (
+              <button key={invoice.id} onClick={() => actions.recordPayment(invoice.id, invoice.balanceDue, "Manual")} className="w-full flex items-center justify-between p-3 rounded-xl text-left" style={{ border: `1px solid ${C.line}` }}>
+                <div>
+                  <p className="text-sm font-medium" style={{ color: C.ink }}>{invoice.number}</p>
+                  <p className="text-xs mt-1" style={{ color: C.charcoal }}>{invoice.status}</p>
+                </div>
+                <span className="text-sm" style={{ color: C.forest }}>{invoice.balanceDue > 0 ? `Apply ${formatCurrency(invoice.balanceDue)}` : "Paid"}</span>
+              </button>
+            ))}
+            {selectedBundle.invoices.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>No invoices for this client yet.</p>}
+          </div>
+        </Card>
+      </div>
+
+      {receipt && (
+        <Modal onClose={() => setReceipt(null)} title="Payment Receipt">
+          <p className="ecc-display text-4xl mt-2" style={{ color: C.ink }}>{formatCurrency(receipt.amount)}</p>
+          <p className="text-sm mt-2" style={{ color: C.charcoal }}>{getClientBundle(state, receipt.clientId).client?.name}</p>
+          <div className="space-y-2 mt-6 text-sm">
+            <PriceRow label="Method" value={receipt.method} />
+            <PriceRow label="Date" value={receipt.paidAt} />
+            <PriceRow label="Invoice" value={state.invoices.find((i) => i.id === receipt.invoiceId)?.number || "—"} />
+            {receipt.note && <PriceRow label="Note" value={receipt.note} />}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
 
-function SessionsPage({ state, selectedBundle, actions }) {
+function SessionsPage({ state, selectedBundle, actions, setPage }) {
   const session = selectedBundle.session;
 
   return (
@@ -888,12 +1586,18 @@ function SessionsPage({ state, selectedBundle, actions }) {
         <EmptyState title="No session record" body="A session record appears as the lead becomes a real project." />
       ) : (
         <Card className="p-5">
+          <RecordTrail selectedBundle={selectedBundle} current="sessions" setPage={setPage} />
           <div className="flex items-start justify-between gap-3 mb-5">
             <div>
               <p className="ecc-display text-4xl" style={{ color: C.ink }}>{selectedBundle.client?.sessionType}</p>
               <p className="text-sm mt-1" style={{ color: C.charcoal }}>{selectedBundle.client?.name}</p>
             </div>
             <Pill tone={session.status === "scheduled" || session.status === "completed" ? "done" : "info"}>{session.status}</Pill>
+          </div>
+          <div className="flex flex-wrap gap-2 mb-5">
+            <button onClick={() => setPage("calendar")} className="text-xs underline" style={{ color: C.forest }}>View on calendar</button>
+            <span style={{ color: C.line }}>·</span>
+            <button onClick={() => setPage("projects")} className="text-xs underline" style={{ color: C.forest }}>Open project workspace</button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
             <SummaryChip label="Date" value={session.sessionDate || "Not set"} />
@@ -935,7 +1639,7 @@ function SessionsPage({ state, selectedBundle, actions }) {
   );
 }
 
-function PortalPage({ selectedBundle, actions, setApp }) {
+function PortalPage({ selectedBundle, actions, setApp, setPage }) {
   const portal = selectedBundle.portal;
   if (!selectedBundle.client || !portal) {
     return <EmptyState title="No portal selected" body="Pick a client with a portal profile to edit." />;
@@ -952,12 +1656,17 @@ function PortalPage({ selectedBundle, actions, setApp }) {
   return (
     <div className="space-y-5">
       <Card className="p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
           <div>
             <p className="ecc-display text-3xl" style={{ color: C.ink }}>Client Portal Editor</p>
             <p className="text-sm mt-1" style={{ color: C.charcoal }}>{selectedBundle.client.name}</p>
           </div>
           <button onClick={() => setApp("client")} className="text-sm underline" style={{ color: C.forest }}>Preview client view</button>
+        </div>
+        <div className="flex flex-wrap gap-2 mb-5">
+          <button onClick={() => setPage("projects")} className="text-xs underline" style={{ color: C.forest }}>← Back to project workspace</button>
+          <span style={{ color: C.line }}>·</span>
+          <button onClick={() => setPage("sessions")} className="text-xs underline" style={{ color: C.forest }}>Session record</button>
         </div>
 
         <div className="flex gap-4 mb-3 text-sm">
@@ -1108,7 +1817,51 @@ function ImageManager({ title, description, images, onChange, footer }) {
   );
 }
 
-function EmailsPage({ selectedBundle, actions }) {
+function BrandingPage({ state, actions }) {
+  const settings = state.studioSettings || {};
+  const heroImages = settings.heroImageUrl ? [{ id: "hero", url: settings.heroImageUrl }] : [];
+  const swatches = [
+    { name: "Charcoal", value: C.charcoal }, { name: "Ink", value: C.ink }, { name: "Cream", value: C.cream },
+    { name: "Taupe", value: C.taupe }, { name: "Blue", value: C.blue }, { name: "Forest", value: C.forest },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <p className="ecc-display text-2xl" style={{ color: C.ink }}>Branding</p>
+      <Card className="p-5">
+        <p className="text-[10px] uppercase tracking-[0.25em] mb-2" style={{ color: C.taupe }}>Dashboard Headline</p>
+        <input
+          value={settings.heroHeadline || ""}
+          onChange={(event) => actions.updateStudioSettings({ heroHeadline: event.target.value })}
+          className="w-full px-3 py-2.5 rounded-xl text-sm"
+          style={{ border: `1px solid ${C.line}`, color: C.ink }}
+        />
+      </Card>
+
+      <ImageManager
+        title="Dashboard Hero Photo"
+        description="Shows on the Studio Admin dashboard. Paste a URL or upload from your device — the most recent image you add becomes the hero."
+        images={heroImages}
+        onChange={(images) => actions.updateStudioSettings({ heroImageUrl: images.length ? images[images.length - 1].url : "" })}
+      />
+
+      <Card className="p-5">
+        <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Color System</p>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          {swatches.map((swatch) => (
+            <div key={swatch.name} className="text-center">
+              <div className="w-full aspect-square rounded-xl mb-1.5" style={{ background: swatch.value, border: `1px solid ${C.line}` }} />
+              <p className="text-xs" style={{ color: C.charcoal }}>{swatch.name}</p>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs mt-3" style={{ color: C.taupe }}>Cormorant Garamond (display) + Jost (body). This is the real system the whole app already runs on, not a preview.</p>
+      </Card>
+    </div>
+  );
+}
+
+function EmailsPage({ selectedBundle, actions, setPage }) {
   if (!selectedBundle.client) {
     return <EmptyState title="No client selected" body="Choose a client to view milestone emails." />;
   }
@@ -1131,9 +1884,10 @@ function EmailsPage({ selectedBundle, actions }) {
             Not-booked reminder
           </button>
         </div>
-        <p className="text-sm" style={{ color: C.charcoal }}>
+        <p className="text-sm mb-3" style={{ color: C.charcoal }}>
           These actions make the handoff visible inside admin instead of relying on implied status changes.
         </p>
+        <button onClick={() => setPage("projects")} className="text-xs underline" style={{ color: C.forest }}>View this client's project workspace →</button>
       </Card>
 
       <Card className="p-5">
@@ -1162,7 +1916,7 @@ function PlaceholderPage({ title, body }) {
   );
 }
 
-function CalendarPage({ state, selectedBundle, actions }) {
+function CalendarPage({ state, selectedBundle, actions, setPage }) {
   const [selected, setSelected] = useState(22);
   const days = Array.from({ length: 30 }, (_, index) => index + 1);
 
@@ -1222,7 +1976,7 @@ function CalendarPage({ state, selectedBundle, actions }) {
         {dayEvents.map((event, index) => (
           <button
             key={index}
-            onClick={() => actions.selectClient(event.clientId)}
+            onClick={() => { actions.selectClient(event.clientId); setPage("sessions"); }}
             className="w-full text-left flex items-center gap-3 py-2.5"
             style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}` }}
           >
@@ -1243,7 +1997,7 @@ function CalendarPage({ state, selectedBundle, actions }) {
   );
 }
 
-function MarketingPage({ state }) {
+function MarketingPage({ state, setPage }) {
   const segments = useMemo(() => {
     const counts = {};
     state.clients.forEach((client) => (client.tags || []).forEach((tag) => { counts[tag] = (counts[tag] || 0) + 1; }));
@@ -1273,10 +2027,10 @@ function MarketingPage({ state }) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-5 pb-5">
           {segments.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>No tags yet.</p>}
           {segments.map((segment) => (
-            <div key={segment.name} className="rounded-xl p-3" style={{ border: `1px solid ${C.line}` }}>
+            <button key={segment.name} onClick={() => setPage("clients")} className="text-left rounded-xl p-3" style={{ border: `1px solid ${C.line}` }}>
               <p className="ecc-display text-2xl" style={{ color: C.ink }}>{segment.count}</p>
               <p className="text-xs" style={{ color: C.charcoal }}>{segment.name}</p>
-            </div>
+            </button>
           ))}
         </div>
       </Card>
@@ -1629,26 +2383,36 @@ function TemplatesPage() {
   );
 }
 
-function ActivityPage({ state }) {
+function ActivityPage({ state, actions, setPage }) {
   return (
     <Card className="p-5">
       <SectionLabel icon={Bell}>All Activity</SectionLabel>
-      <div className="space-y-3">
-        {state.activity.map((entry) => (
-          <div key={entry.id} className="rounded-xl p-3" style={{ background: C.bg }}>
-            <p className="text-sm" style={{ color: C.ink }}>{entry.text}</p>
-            <p className="text-xs mt-1" style={{ color: C.taupe }}>{entry.createdAt}</p>
-          </div>
-        ))}
+      <div className="space-y-2">
+        {state.activity.map((entry) => {
+          const bundle = getClientBundle(state, entry.clientId);
+          return (
+            <button
+              key={entry.id}
+              onClick={() => { if (bundle.client) { actions.selectClient(entry.clientId); setPage("clients"); } }}
+              className="w-full text-left rounded-xl p-3"
+              style={{ background: C.bg, cursor: bundle.client ? "pointer" : "default" }}
+            >
+              <p className="text-sm" style={{ color: bundle.client ? C.forest : C.ink, textDecoration: bundle.client ? "underline" : "none" }}>{entry.text}</p>
+              <p className="text-xs mt-1" style={{ color: C.taupe }}>{entry.createdAt}</p>
+            </button>
+          );
+        })}
       </div>
     </Card>
   );
 }
 
-function BookingChecklistCard({ selectedBundle }) {
+function BookingChecklistCard({ selectedBundle, setPage }) {
   if (!selectedBundle.client) {
     return <Card className="p-5"><EmptyState title="No client selected" body="Select a client to inspect the booking gate." /></Card>;
   }
+
+  const stepPage = { quoteAccepted: "quotes", contractSigned: "contracts", paymentReceived: "invoices" };
 
   return (
     <Card className="p-5">
@@ -1657,27 +2421,33 @@ function BookingChecklistCard({ selectedBundle }) {
         {BOOKING_STEPS.map((step) => {
           const complete = selectedBundle.booking.steps[step.key];
           return (
-            <div key={step.key} className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: C.bg }}>
+            <button
+              key={step.key}
+              onClick={() => setPage && setPage(stepPage[step.key] || "projects")}
+              className="w-full flex items-center justify-between rounded-xl px-4 py-3"
+              style={{ background: C.bg }}
+            >
               <span className="text-sm" style={{ color: C.ink }}>{step.label}</span>
               <Pill tone={complete ? "done" : "warn"}>{complete ? "Complete" : "Missing"}</Pill>
-            </div>
+            </button>
           );
         })}
       </div>
       <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-        <SummaryChip label="Booked status" value={selectedBundle.booking.isBooked ? "Booked" : "Not booked"} />
-        <SummaryChip label="Project creation" value={selectedBundle.projectStatus.projectCreated ? "Unlocked" : "Locked"} />
+        <SummaryChip label="Booked status" value={selectedBundle.booking.isBooked ? "Booked" : "Not booked"} onClick={() => setPage && setPage("projects")} />
+        <SummaryChip label="Project creation" value={selectedBundle.projectStatus.projectCreated ? "Unlocked" : "Locked"} onClick={() => setPage && setPage("projects")} />
       </div>
     </Card>
   );
 }
 
-function SummaryChip({ label, value }) {
+function SummaryChip({ label, value, onClick }) {
+  const Wrapper = onClick ? "button" : "div";
   return (
-    <div className="rounded-2xl p-4" style={{ background: C.bg }}>
+    <Wrapper onClick={onClick} className="rounded-2xl p-4 text-left w-full" style={{ background: C.bg }}>
       <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>{label}</p>
       <p className="text-sm mt-2 font-medium" style={{ color: C.ink }}>{value}</p>
-    </div>
+    </Wrapper>
   );
 }
 

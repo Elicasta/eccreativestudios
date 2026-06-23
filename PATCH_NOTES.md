@@ -60,3 +60,36 @@ This is intentional context for why v2 exists — the v1 patch notes were honest
 ### Verification
 - `npm install && npm run build` — compiles, lints, and statically prerenders with no errors.
 - Manually traced every new reducer action (`force_stage`, `mark_lost`, `mark_archived`, `deliver_gallery`) against `getClientBundle`'s actual field names to make sure nothing reads a property that doesn't exist.
+
+---
+
+## v3 — Click-through, scale, and depth pass
+
+### Fixed
+- **Client overview hero photo wasn't rendering.** The client portal's Overview page never read `portal.visionImages` at all — the hero was always a plain text gradient. It now shows the first vision board image as a real photo, clickable through to the full Vision Board.
+- **Dashboard had no hero photo support.** Added `studioSettings.heroImageUrl` (set from the new Branding page) so the admin dashboard hero can show a real photo instead of being permanently gradient-only.
+
+### Added — navigation & cross-linking
+- Topbar title is now dynamic per page (was hardcoded "Studio Admin" everywhere).
+- Global client switcher in the Topbar — change the active client from any page, not just Dashboard/Clients/Pipeline.
+- Sidebar restored to grouped sections (Clients / Sales / Communication / Studio) instead of one flat list.
+- Pipeline cards now show client avatar, quote value, and a clear hover/active state — clicking was already wired, now it's obvious it's clickable.
+
+### Added — Dashboard
+- General aggregate view (Pipeline Overview preview + Revenue Snapshot donut + Upcoming Sessions) shows automatically when no client is selected; swaps to the focused client view the moment one is picked. "Clear" button to drop back to general view.
+- Revenue Snapshot is a real conic-gradient donut computed from actual invoice totals by status (draft / sent / partially paid / collected) — not fake numbers.
+
+### Added — scale (built for 100+ clients, not 4)
+- Inquiries: stat cards by status, session-type filter, search, sort by received date.
+- Clients: status filter pills (In progress / Booked / Lost), compact rows, "Show more" pagination instead of rendering every client at once.
+- Projects: working search box + "booked only" toggle + pagination on the folder grid.
+
+### Added — Quotes / Contracts / Invoices / Payments depth
+- Quotes: preview moved into a modal (was a permanent half-screen panel), real breathing room in the builder, "+ Add package" / "+ Add addon" catalog pickers, per-item "optional add-on" toggle. (Client-must-pick-one bundles are flagged as not-yet-built, not faked.)
+- Contracts: now reads like an actual document — numbered legal clauses (editable), Photographer/Client parties block, a real signature block with a printed-name line and date, instead of one paragraph of filler text.
+- Invoices: real line-item builder (add/remove/edit, same catalog pickers as Quotes), due date as an actual date input, preview modal, payment method selector.
+- Payments: payment-method breakdown, a real "record a payment" form (pick invoice + amount + method) instead of only a blanket "pay full balance" button, and a receipt modal per logged payment.
+
+### Verification
+- `npm run build` — compiles, lints, and statically prerenders clean after every section above.
+- Existing `localStorage` saves from before this pass will load fine — all new fields (`studioSettings`, `contract.clauses`, catalog-added items) are read with safe fallbacks, so old persisted demo data won't crash the app, it just won't have the new fields until you trigger a Manual Override or recreate the record.

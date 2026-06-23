@@ -82,7 +82,7 @@ export default function ClientApp({ selectedBundle, actions }) {
           <StatusLight tone={selectedBundle.stage === "deposit_paid" || selectedBundle.stage === "session_scheduled" ? "green" : "yellow"} label={PIPELINE_LABELS[selectedBundle.stage]} />
         </div>
         <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
-          {page === "overview" && <OverviewPage selectedBundle={selectedBundle} actions={actions} />}
+          {page === "overview" && <OverviewPage selectedBundle={selectedBundle} actions={actions} setPage={setPage} />}
           {page === "documents" && <DocumentsPage selectedBundle={selectedBundle} actions={actions} />}
           {page === "details" && <DetailsPage selectedBundle={selectedBundle} />}
           {page === "vision" && <VisionPage selectedBundle={selectedBundle} />}
@@ -142,29 +142,46 @@ function PortalSidebar({ page, setPage, clientName, sessionType }) {
   );
 }
 
-function OverviewPage({ selectedBundle, actions }) {
+function OverviewPage({ selectedBundle, actions, setPage }) {
   const session = selectedBundle.session;
   const portal = selectedBundle.portal;
   const quote = selectedBundle.primaryQuote;
   const contract = selectedBundle.primaryContract;
   const invoice = selectedBundle.primaryInvoice;
+  const heroImage = portal?.visionImages?.[0];
 
   return (
     <div className="space-y-5">
-      <Card className="p-6 sm:p-8" style={{ background: `linear-gradient(135deg, ${C.charcoal}, ${C.ink})`, borderColor: "transparent" }}>
-        <p className="text-[10px] uppercase tracking-[0.35em]" style={{ color: C.taupe }}>Session Journey</p>
-        <p className="ecc-display text-4xl text-white mt-3 max-w-xl leading-tight">
-          Everything for your session, beautifully organized in one place.
-        </p>
-        <p className="text-sm mt-4 max-w-lg" style={{ color: C.cream }}>
-          Review your proposal, sign, pay, choose your date, and prepare for your session without losing the calm editorial feel.
-        </p>
+      <Card className="overflow-hidden" style={{ borderColor: "transparent" }}>
+        <div className={`grid grid-cols-1 ${heroImage ? "sm:grid-cols-[1.2fr_1fr]" : ""}`} style={{ background: `linear-gradient(135deg, ${C.charcoal}, ${C.ink})` }}>
+          <div className="p-6 sm:p-8">
+            <p className="text-[10px] uppercase tracking-[0.35em]" style={{ color: C.taupe }}>Session Journey</p>
+            <p className="ecc-display text-4xl text-white mt-3 max-w-xl leading-tight">
+              Everything for your session, beautifully organized in one place.
+            </p>
+            <p className="text-sm mt-4 max-w-lg" style={{ color: C.cream }}>
+              Review your proposal, sign, pay, choose your date, and prepare for your session without losing the calm editorial feel.
+            </p>
+          </div>
+          {heroImage && (
+            <button onClick={() => setPage("vision")} className="block w-full h-full min-h-[200px]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={heroImage.url} alt="" className="w-full h-full object-cover" />
+            </button>
+          )}
+        </div>
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <InfoCard label="Current step" value={PIPELINE_LABELS[selectedBundle.stage]} />
-        <InfoCard label="Session status" value={session?.status || "planning"} />
-        <InfoCard label="Balance remaining" value={formatCurrency(selectedBundle.invoices.reduce((sum, entry) => sum + entry.balanceDue, 0))} />
+        <button onClick={() => setPage("documents")} className="text-left">
+          <InfoCard label="Current step" value={PIPELINE_LABELS[selectedBundle.stage]} />
+        </button>
+        <button onClick={() => setPage("details")} className="text-left">
+          <InfoCard label="Session status" value={session?.status || "planning"} />
+        </button>
+        <button onClick={() => setPage("payments")} className="text-left">
+          <InfoCard label="Balance remaining" value={formatCurrency(selectedBundle.invoices.reduce((sum, entry) => sum + entry.balanceDue, 0))} />
+        </button>
       </div>
 
       {selectedBundle.stage === "deposit_paid" && session?.status === "awaiting_schedule" && (
@@ -194,45 +211,55 @@ function OverviewPage({ selectedBundle, actions }) {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <DocumentStatusCard
-          icon={FileText}
-          title={quote?.number || "Quote"}
-          status={quote?.status || "not created"}
-          description={quote ? `${formatCurrency(quote.total)} total proposal` : "Your quote will appear here once it is prepared."}
-        />
-        <DocumentStatusCard
-          icon={FileSignature}
-          title={contract?.number || "Contract"}
-          status={contract?.status || "not created"}
-          description={contract ? contract.templateName : "Your contract becomes available after quote acceptance."}
-        />
-        <DocumentStatusCard
-          icon={CreditCard}
-          title={invoice?.number || "Invoice"}
-          status={invoice?.status || "not created"}
-          description={invoice ? `${formatCurrency(invoice.balanceDue)} balance due` : "Invoices appear once your booking paperwork is ready."}
-        />
+        <button onClick={() => setPage("documents")} className="text-left">
+          <DocumentStatusCard
+            icon={FileText}
+            title={quote?.number || "Quote"}
+            status={quote?.status || "not created"}
+            description={quote ? `${formatCurrency(quote.total)} total proposal` : "Your quote will appear here once it is prepared."}
+          />
+        </button>
+        <button onClick={() => setPage("documents")} className="text-left">
+          <DocumentStatusCard
+            icon={FileSignature}
+            title={contract?.number || "Contract"}
+            status={contract?.status || "not created"}
+            description={contract ? contract.templateName : "Your contract becomes available after quote acceptance."}
+          />
+        </button>
+        <button onClick={() => setPage("payments")} className="text-left">
+          <DocumentStatusCard
+            icon={CreditCard}
+            title={invoice?.number || "Invoice"}
+            status={invoice?.status || "not created"}
+            description={invoice ? `${formatCurrency(invoice.balanceDue)} balance due` : "Invoices appear once your booking paperwork is ready."}
+          />
+        </button>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_0.9fr] gap-4">
-        <Card className="p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <MapPin size={16} color={C.taupe} />
-            <p className="text-[10px] uppercase tracking-[0.3em]" style={{ color: C.taupe }}>Session Details</p>
-          </div>
-          <div className="space-y-2 text-sm" style={{ color: C.ink }}>
-            <p>Date: {session?.sessionDate || portal?.customDate || "Waiting for your selection"}</p>
-            <p>Time: {session?.sessionTime || portal?.customTime || "To be confirmed"}</p>
-            <p>Location: {portal?.customLocation || "Dallas, TX"}</p>
-          </div>
-        </Card>
-        <Card className="p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Sparkles size={16} color={C.taupe} />
-            <p className="text-[10px] uppercase tracking-[0.3em]" style={{ color: C.taupe }}>Vision</p>
-          </div>
-          <p className="text-sm leading-7" style={{ color: C.ink }}>{portal?.sessionVision || "Your visual plan will appear here once your session is confirmed."}</p>
-        </Card>
+        <button onClick={() => setPage("details")} className="text-left">
+          <Card className="p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <MapPin size={16} color={C.taupe} />
+              <p className="text-[10px] uppercase tracking-[0.3em]" style={{ color: C.taupe }}>Session Details</p>
+            </div>
+            <div className="space-y-2 text-sm" style={{ color: C.ink }}>
+              <p>Date: {session?.sessionDate || portal?.customDate || "Waiting for your selection"}</p>
+              <p>Time: {session?.sessionTime || portal?.customTime || "To be confirmed"}</p>
+              <p>Location: {portal?.customLocation || "Dallas, TX"}</p>
+            </div>
+          </Card>
+        </button>
+        <button onClick={() => setPage("vision")} className="text-left">
+          <Card className="p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles size={16} color={C.taupe} />
+              <p className="text-[10px] uppercase tracking-[0.3em]" style={{ color: C.taupe }}>Vision</p>
+            </div>
+            <p className="text-sm leading-7" style={{ color: C.ink }}>{portal?.sessionVision || "Your visual plan will appear here once your session is confirmed."}</p>
+          </Card>
+        </button>
       </div>
     </div>
   );
