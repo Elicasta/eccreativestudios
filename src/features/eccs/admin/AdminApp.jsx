@@ -71,6 +71,7 @@ const NAV = [
     { key: "addons", label: "Add-Ons", icon: Plus },
   ] },
   { group: "Communication", items: [
+    { key: "clientMessages", label: "Client Messages", icon: MessageCircle },
     { key: "emails", label: "Emails", icon: Mail },
     { key: "marketing", label: "Email Marketing", icon: Megaphone },
     { key: "social", label: "Social Messaging", icon: MessageCircle },
@@ -101,6 +102,7 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
   const [query, setQuery] = useState("");
   const [drawer, setDrawer] = useState(false);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+  const [backStack, setBackStack] = useState([]);
 
   const filteredClients = useMemo(() => {
     const lower = query.trim().toLowerCase();
@@ -111,7 +113,22 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
   }, [query, state.clients]);
 
   const go = (nextPage) => {
+    if (!nextPage || nextPage === page) {
+      setDrawer(false);
+      return;
+    }
+    setBackStack((stack) => [...stack.slice(-24), page]);
     setPage(nextPage);
+    setDrawer(false);
+  };
+
+  const goBack = () => {
+    setBackStack((stack) => {
+      const previous = stack[stack.length - 1];
+      if (!previous) return stack;
+      setPage(previous);
+      return stack.slice(0, -1);
+    });
     setDrawer(false);
   };
 
@@ -143,6 +160,8 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
           actions={actions}
           page={page}
           setPage={go}
+          onBack={goBack}
+          canGoBack={backStack.length > 0}
           onQuickCreate={() => setQuickCreateOpen(true)}
         />
         <div className="p-4 sm:p-6 lg:p-8 max-w-[1520px] mx-auto space-y-5">
@@ -178,6 +197,7 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
           {page === "sessions" && <SessionsPage state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
           {page === "calendar" && <CalendarPage state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
           {page === "portal" && <PortalPage key={`portal-${state.selectedClientId}`} selectedBundle={selectedBundle} actions={actions} setApp={setApp} setPage={go} />}
+          {page === "clientMessages" && <ClientMessagesPage state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
           {page === "emails" && <EmailsPage selectedBundle={selectedBundle} actions={actions} setPage={go} />}
           {page === "marketing" && <MarketingPage state={state} actions={actions} setPage={go} />}
           {page === "social" && <SocialPage state={state} actions={actions} />}
@@ -185,7 +205,7 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
           {page === "templates" && <TemplatesPage />}
           {page === "workflows" && <PlaceholderPage title="Workflows" body="Automation rules (auto-send prep guide, auto-remind on unpaid invoice) live here in v2. This skeleton moves clients through the pipeline via real actions and Manual Override instead." />}
           {page === "activity" && <ActivityPage state={state} actions={actions} setPage={go} />}
-          {page === "settings" && <PlaceholderPage title="Settings" body="Studio info, tax rates, payment methods, notification preferences." />}
+          {page === "settings" && <SettingsPage state={state} actions={actions} />}
           {page === "branding" && <BrandingPage state={state} actions={actions} />}
           {page === "team" && <PlaceholderPage title="Team" body="Add Emily and any second shooters or editors with role-based access once auth exists." />}
         </div>
@@ -267,21 +287,51 @@ function Sidebar({ page, setPage, onClose }) {
   );
 }
 
-function Topbar({ query, setQuery, onMenu, title, state, selectedBundle, actions, onQuickCreate }) {
+function Topbar({ query, setQuery, onMenu, title, state, selectedBundle, actions, setPage, onBack, canGoBack, onQuickCreate }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
+  const activeClientSearch = clientSearch || query;
   const pickerClients = state.clients.filter((client) => {
-    const needle = clientSearch.trim().toLowerCase();
+    const needle = activeClientSearch.trim().toLowerCase();
     if (!needle) return true;
     return [client.name, client.email, client.sessionType].some((value) => value?.toLowerCase().includes(needle));
   });
+
+  const globalResults = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return [];
+    const clientResults = state.clients
+      .filter((client) => [client.name, client.email, client.phone, client.sessionType].some((value) => String(value || "").toLowerCase().includes(needle)))
+      .slice(0, 4)
+      .map((client) => ({ key: `client-${client.id}`, type: "Client", title: client.name, subtitle: client.sessionType, onClick: () => { actions.selectClient(client.id); setPage("clients"); setQuery(""); } }));
+    const quoteResults = state.quotes
+      .filter((quote) => [quote.number, quote.eventType, quote.status].some((value) => String(value || "").toLowerCase().includes(needle)))
+      .slice(0, 3)
+      .map((quote) => ({ key: `quote-${quote.id}`, type: "Quote", title: quote.number, subtitle: `${quote.eventType} · ${formatCurrency(quote.total)}`, onClick: () => { actions.selectClient(quote.clientId); setPage("quotes"); setQuery(""); } }));
+    const invoiceResults = state.invoices
+      .filter((invoice) => [invoice.number, invoice.kind, invoice.status].some((value) => String(value || "").toLowerCase().includes(needle)))
+      .slice(0, 3)
+      .map((invoice) => ({ key: `invoice-${invoice.id}`, type: "Invoice", title: invoice.number, subtitle: `${invoice.kind} · ${formatCurrency(invoice.balanceDue)} due`, onClick: () => { actions.selectClient(invoice.clientId); setPage("invoices"); setQuery(""); } }));
+    const inquiryResults = state.inquiries
+      .filter((inquiry) => [inquiry.name, inquiry.email, inquiry.sessionType, inquiry.location, inquiry.notes].some((value) => String(value || "").toLowerCase().includes(needle)))
+      .slice(0, 3)
+      .map((inquiry) => ({ key: `inquiry-${inquiry.id}`, type: "Inquiry", title: inquiry.name, subtitle: `${inquiry.sessionType} · ${inquiry.status === "approved" ? "in progress" : inquiry.status}`, onClick: () => { if (inquiry.clientId) actions.selectClient(inquiry.clientId); setPage("inquiries"); setQuery(""); } }));
+    const sessionResults = state.sessions
+      .filter((session) => [session.sessionType, session.sessionDate, session.sessionTime, session.status].some((value) => String(value || "").toLowerCase().includes(needle)))
+      .slice(0, 3)
+      .map((session) => ({ key: `session-${session.id}`, type: "Session", title: session.sessionType, subtitle: `${session.sessionDate || "No date"} · ${session.status}`, onClick: () => { actions.selectClient(session.clientId); setPage("sessions"); setQuery(""); } }));
+    return [...clientResults, ...quoteResults, ...invoiceResults, ...inquiryResults, ...sessionResults].slice(0, 8);
+  }, [query, state, actions, setPage, setQuery]);
   return (
     <div className="relative flex items-center gap-3 px-4 sm:px-6 py-4" style={{ borderBottom: `1px solid ${C.line}` }}>
       <button className="md:hidden" onClick={onMenu}><Menu size={20} color={C.ink} /></button>
+      <button disabled={!canGoBack} onClick={onBack} className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium disabled:opacity-30" style={{ background: C.bg, color: C.charcoal }} title="Back to previous CRM view">
+        <ChevronLeft size={14} /> Back
+      </button>
       <p className="ecc-display text-2xl flex-1" style={{ color: C.ink }}>
         {title}
       </p>
-      <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-full w-full max-w-xs" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+      <div className="hidden sm:flex relative items-center gap-2 px-3 py-2 rounded-full w-full max-w-xs" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
         <Search size={14} color={C.taupe} />
         <input
           value={query}
@@ -295,6 +345,21 @@ function Topbar({ query, setQuery, onMenu, title, state, selectedBundle, actions
             <X size={14} color={C.taupe} />
           </button>
         )}
+        {query && (
+          <div className="absolute left-0 right-0 top-full mt-2 rounded-2xl shadow-lg z-50 overflow-hidden" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+            <p className="text-[10px] uppercase tracking-[0.25em] px-4 pt-3 pb-1" style={{ color: C.taupe }}>Search results</p>
+            {globalResults.length === 0 && <p className="px-4 py-3 text-sm" style={{ color: C.taupe }}>No clients, quotes, invoices, sessions, or inquiries match.</p>}
+            {globalResults.map((item) => (
+              <button key={item.key} onClick={item.onClick} className="w-full text-left px-4 py-3 flex items-center justify-between gap-3" style={{ borderTop: `1px solid ${C.line}` }}>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate" style={{ color: C.ink }}>{item.title}</p>
+                  <p className="text-xs truncate" style={{ color: C.taupe }}>{item.subtitle}</p>
+                </div>
+                <Pill tone="info">{item.type}</Pill>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <button
@@ -303,7 +368,7 @@ function Topbar({ query, setQuery, onMenu, title, state, selectedBundle, actions
         style={{ background: C.cream, color: C.ink }}
       >
         <Avatar name={selectedBundle.client?.name || "?"} size={22} />
-        <span className="hidden lg:inline max-w-[140px] truncate">{selectedBundle.client?.name || "Choose client"}</span>
+        <span className="hidden lg:inline max-w-[160px] truncate">{query && pickerClients.length ? `Switch: ${pickerClients[0].name}` : selectedBundle.client?.name || "Choose client"}</span>
         <ChevronDown size={14} color={C.taupe} />
       </button>
 
@@ -318,7 +383,7 @@ function Topbar({ query, setQuery, onMenu, title, state, selectedBundle, actions
             <p className="text-[10px] uppercase tracking-[0.25em] px-4 pt-3 pb-2" style={{ color: C.taupe }}>Switch client</p>
             <div className="mx-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-full" style={{ background: C.bg }}>
               <Search size={14} color={C.taupe} />
-              <input value={clientSearch} onChange={(event) => setClientSearch(event.target.value)} placeholder="Search name, email, session..." className="bg-transparent outline-none text-sm w-full" style={{ color: C.ink }} />
+              <input value={clientSearch} onChange={(event) => setClientSearch(event.target.value)} placeholder={query ? `Matches for ${query}` : "Search name, email, session..."} className="bg-transparent outline-none text-sm w-full" style={{ color: C.ink }} />
               {clientSearch && <button onClick={() => setClientSearch("")}><X size={13} color={C.taupe} /></button>}
             </div>
             {pickerClients.map((client) => (
@@ -605,13 +670,15 @@ function DashboardPage({ state, selectedBundle, filteredClients, actions, setPag
           <div className={`grid grid-cols-1 ${heroUrl ? "sm:grid-cols-[1.2fr_1fr]" : ""}`} style={{ background: `linear-gradient(135deg, ${C.charcoal}, ${C.ink})` }}>
             <div className="p-8 sm:p-10">
               <p className="text-[10px] uppercase tracking-[0.35em] mb-3" style={{ color: C.taupe }}>
-                EC Creative Studios
+                {selectedBundle.client ? "Selected Client" : "EC Creative Studios"}
               </p>
               <p className="ecc-display text-4xl text-white max-w-xl leading-tight">
-                {state.studioSettings?.heroHeadline || "Admin first. Booking rules before everything else."}
+                {selectedBundle.client ? selectedBundle.client.name : state.studioSettings?.heroHeadline || "Admin first. Booking rules before everything else."}
               </p>
               <p className="text-sm mt-4 max-w-lg" style={{ color: C.cream }}>
-                This dashboard now makes the quote, contract, payment, project, portal, and calendar handoff explicit.
+                {selectedBundle.client
+                  ? `${selectedBundle.client.sessionType} · ${PIPELINE_LABELS[selectedBundle.stage]} · next: ${nextActionText(selectedBundle)}`
+                  : "This dashboard now makes the quote, contract, payment, project, portal, and calendar handoff explicit."}
               </p>
               {!heroUrl && (
                 <button onClick={() => setPage("branding")} className="text-xs underline mt-4 inline-block" style={{ color: C.taupe }}>
@@ -735,6 +802,25 @@ function DashboardPage({ state, selectedBundle, filteredClients, actions, setPag
         {selectedBundle.client && <BookingChecklistCard selectedBundle={selectedBundle} setPage={setPage} />}
 
         <RevenueCard state={state} setPage={setPage} />
+
+        <Card className="p-5">
+          <div className="flex items-center justify-between px-5 pt-5 pb-1">
+            <SectionLabel icon={MessageCircle}>Client Messages</SectionLabel>
+            <button onClick={() => setPage("clientMessages")} className="text-xs underline" style={{ color: C.forest }}>Open messages</button>
+          </div>
+          <div className="px-5 pb-5 space-y-2">
+            {(state.messages || []).filter((message) => message.from === "client").slice(0, 3).map((message) => {
+              const bundle = getClientBundle(state, message.clientId);
+              return (
+                <button key={message.id} onClick={() => { actions.selectClient(message.clientId); setPage("clientMessages"); }} className="w-full text-left rounded-xl p-3" style={{ background: C.bg }}>
+                  <div className="flex items-center gap-2 mb-1"><span className="w-2 h-2 rounded-full" style={{ background: C.forest }} /><p className="text-sm font-medium" style={{ color: C.ink }}>{bundle.client?.name || "Client"}</p></div>
+                  <p className="text-xs truncate" style={{ color: C.charcoal }}>{message.text}</p>
+                </button>
+              );
+            })}
+            {(state.messages || []).filter((message) => message.from === "client").length === 0 && <p className="text-sm" style={{ color: C.taupe }}>No unread client messages.</p>}
+          </div>
+        </Card>
 
         <Card className="p-5">
           <div className="flex items-center justify-between px-5 pt-5 pb-1">
@@ -911,13 +997,14 @@ function InquiriesPage({ state, actions, setPage }) {
   const stats = [
     { key: "all", label: "All", count: state.inquiries.length },
     { key: "new", label: "New", count: state.inquiries.filter((e) => e.status === "new").length },
-    { key: "approved", label: "Approved", count: state.inquiries.filter((e) => e.status === "approved").length },
+    { key: "approved", label: "In Progress", count: state.inquiries.filter((e) => e.status === "approved").length },
+    { key: "followup", label: "Follow-Up", count: state.inquiries.filter((e) => ["sent", "approved"].includes(e.status)).length },
     { key: "converted", label: "Converted", count: state.inquiries.filter((e) => e.status === "converted").length },
     { key: "lost", label: "Lost", count: state.inquiries.filter((e) => e.status === "lost").length },
   ];
 
   const filtered = state.inquiries
-    .filter((entry) => statusFilter === "all" || entry.status === statusFilter)
+    .filter((entry) => statusFilter === "all" || (statusFilter === "followup" ? ["sent", "approved"].includes(entry.status) : entry.status === statusFilter))
     .filter((entry) => typeFilter === "all" || entry.sessionType === typeFilter)
     .filter((entry) => {
       const needle = query.trim().toLowerCase();
@@ -984,14 +1071,14 @@ function InquiriesPage({ state, actions, setPage }) {
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: C.ink }}>{inquiry.name}</p>
                     <p className="text-xs mt-1" style={{ color: C.charcoal }}>
-                      {inquiry.sessionType} • {pkg?.name || "No package picked"} • {inquiry.budgetRange || "No budget"} • {inquiry.receivedAt}
+                      {inquiry.sessionType} • Preferred date: {inquiry.desiredDate || "TBD"} • {inquiry.location || "No location"} • {inquiry.receivedAt}
                     </p>
                     <p className="text-xs mt-2 max-w-md line-clamp-2" style={{ color: C.charcoal }}>{inquiry.notes}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Pill tone={inquiry.status === "new" ? "warn" : inquiry.status === "lost" ? "warn" : "info"}>{inquiry.status}</Pill>
-                  {hasClient && <Pill tone="done">client record</Pill>}
+                  <Pill tone={inquiry.status === "new" ? "warn" : inquiry.status === "lost" ? "warn" : "info"}>{inquiry.status === "approved" ? "in progress" : inquiry.status}</Pill>
+                  <Pill tone={hasClient ? "done" : "warn"}>{hasClient ? "Returning Client" : "First-time Client"}</Pill>
                   <ChevronRight size={14} color={C.taupe} />
                 </div>
               </button>
@@ -1040,7 +1127,7 @@ function InquiryDetailModal({ inquiry, packages, actions, onClose, onOpenClient,
       </div>
 
       <div className="rounded-2xl p-4 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-        <p className="text-[10px] uppercase tracking-[0.25em] mb-1.5" style={{ color: C.taupe }}>Package requested</p>
+        <p className="text-[10px] uppercase tracking-[0.25em] mb-1.5" style={{ color: C.taupe }}>Quote package default</p>
         <select
           value={inquiry.packageId || ""}
           onChange={(event) => actions.patchInquiry(inquiry.id, { packageId: event.target.value })}
@@ -1051,7 +1138,7 @@ function InquiryDetailModal({ inquiry, packages, actions, onClose, onOpenClient,
           {packageOptions.map((pkg) => <option key={pkg.id} value={pkg.id}>{pkg.name} — {formatCurrency(pkg.price)}</option>)}
         </select>
         <p className="text-xs" style={{ color: C.charcoal }}>
-          This package becomes the default quote option and loads the matching quote/email language.
+This is only an admin-side quote starting point. The public inquiry should capture session type, preferred date, location, vision, and notes before any official package choice.
         </p>
         {selectedPackage && <p className="text-xs mt-2" style={{ color: C.taupe }}>{selectedPackage.description}</p>}
       </div>
@@ -1145,60 +1232,10 @@ function ClientsPage({ state, selectedBundle, filteredClients, actions, setPage 
   }
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-5">
-      <Card className="p-4">
-        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-2">
-          <div>
-            <SectionLabel icon={Users}>Client Records</SectionLabel>
-            <p className="text-xs px-5 -mt-1" style={{ color: C.taupe }}>{scoped.length} visible · 100+ client directory behavior</p>
-          </div>
-          <button onClick={() => actions.selectClient(null)} className="text-xs underline mt-2" style={{ color: C.charcoal }}>All contacts</button>
-        </div>
-        <div className="mx-5 mb-3 flex items-center gap-2 px-3 py-2 rounded-full" style={{ background: C.bg }}>
-          <Search size={14} color={C.taupe} />
-          <input value={localQuery} onChange={(event) => { setLocalQuery(event.target.value); setVisibleCount(24); }} placeholder="Search clients by name, email, phone, tag..." className="bg-transparent outline-none text-sm w-full" style={{ color: C.ink }} />
-          {localQuery && <button onClick={() => setLocalQuery("")}><X size={13} color={C.taupe} /></button>}
-        </div>
-        <div className="flex gap-1.5 px-5 pb-3 overflow-x-auto ecc-scrollbar">
-          {filters.map((filter) => (
-            <button
-              key={filter.key}
-              onClick={() => { setStatusFilter(filter.key); setVisibleCount(24); }}
-              className="text-xs px-3 py-1.5 rounded-full font-medium shrink-0"
-              style={{ background: statusFilter === filter.key ? C.charcoal : C.bg, color: statusFilter === filter.key ? "#fff" : C.charcoal }}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </div>
-        <div className="space-y-1.5 px-1">
-          {visible.map(({ client, bundle }) => {
-            const active = client.id === state.selectedClientId;
-            return (
-              <button
-                key={client.id}
-                onClick={() => actions.selectClient(client.id)}
-                className="w-full flex items-center gap-2.5 p-2.5 rounded-xl text-left"
-                style={{ background: active ? C.cream : "#fff", border: `1px solid ${active ? C.taupe : C.line}` }}
-              >
-                <Avatar name={client.name} size={34} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate" style={{ color: C.ink }}>{client.name}</p>
-                  <p className="text-xs truncate" style={{ color: C.charcoal }}>{client.email || client.sessionType}</p>
-                </div>
-                <Pill tone={bundle.booking.isBooked ? "done" : "info"}>{PIPELINE_LABELS[bundle.stage]}</Pill>
-              </button>
-            );
-          })}
-          {scoped.length === 0 && <p className="text-sm px-3 py-2" style={{ color: C.taupe }}>No clients match this filter.</p>}
-        </div>
-        {visibleCount < scoped.length && (
-          <button onClick={() => setVisibleCount((count) => count + 48)} className="w-full mt-3 py-2 rounded-xl text-xs font-medium" style={{ background: C.bg, color: C.charcoal }}>
-            Show more ({scoped.length - visibleCount} remaining)
-          </button>
-        )}
-      </Card>
-
+    <div className="space-y-4">
+      <button onClick={() => actions.selectClient(null)} className="px-4 py-2.5 rounded-full text-sm font-medium" style={{ background: C.cream, color: C.ink }}>
+        All Clients
+      </button>
       <ClientDetailPanel selectedBundle={selectedBundle} setPage={setPage} />
     </div>
   );
@@ -1227,7 +1264,7 @@ function ContactDirectoryView({ state, clients, inquiries, actions, setPage, ope
   const tabs = [
     ["all", "All", clientRows.length + leadRows.length],
     ["clients", "Clients", clientRows.length],
-    ["leads", "Leads", leadRows.length],
+    ["leads", "New Clients", leadRows.length],
     ["other", "Other", allRows.filter((row) => !row.email).length],
   ];
 
@@ -1279,7 +1316,7 @@ function ContactDirectoryView({ state, clients, inquiries, actions, setPage, ope
                   <p className="text-sm font-medium truncate" style={{ color: C.ink }}>{row.name}</p>
                   <p className="text-sm truncate" style={{ color: C.charcoal }}>{row.email || row.subtitle}</p>
                 </div>
-                <Pill tone={row.type === "client" ? "done" : "warn"}>{row.type}</Pill>
+                <Pill tone={row.type === "client" ? "done" : "warn"}>{row.type === "lead" ? "new client" : row.type}</Pill>
               </button>
             ))}
           </div>
@@ -1290,48 +1327,122 @@ function ContactDirectoryView({ state, clients, inquiries, actions, setPage, ope
 }
 
 function ClientDetailPanel({ selectedBundle, setPage }) {
+  const [inquiryOpen, setInquiryOpen] = useState(false);
+  const portalUrl = selectedBundle.client ? `https://eccreativestudios.com/portal/${selectedBundle.client.id}` : "";
+  const copyPortal = () => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) navigator.clipboard.writeText(portalUrl).catch(() => {});
+  };
   return (
-    <Card className="p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
-        <div className="flex items-center gap-3">
-          <Avatar name={selectedBundle.client.name} size={56} />
-          <div>
-            <p className="ecc-display text-4xl leading-tight" style={{ color: C.ink }}>{selectedBundle.client.name}</p>
-            <p className="text-sm mt-1" style={{ color: C.charcoal }}>
-              {selectedBundle.client.email} • {selectedBundle.client.phone}
-            </p>
-            <p className="text-sm mt-1" style={{ color: C.charcoal }}>{selectedBundle.client.sessionType} • {selectedBundle.client.city}</p>
+    <>
+      <Card className="p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+          <div className="flex items-center gap-3">
+            <Avatar name={selectedBundle.client.name} size={56} />
+            <div>
+              <p className="ecc-display text-4xl leading-tight" style={{ color: C.ink }}>{selectedBundle.client.name}</p>
+              <p className="text-sm mt-1" style={{ color: C.charcoal }}>{selectedBundle.client.email} • {selectedBundle.client.phone}</p>
+              <p className="text-sm mt-1" style={{ color: C.charcoal }}>{selectedBundle.client.sessionType} • {selectedBundle.client.city}</p>
+            </div>
+          </div>
+          <StatusLight tone={selectedBundle.booking.isBooked ? "green" : "yellow"} label={selectedBundle.booking.isBooked ? "Booked" : PIPELINE_LABELS[selectedBundle.stage]} />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
+          <SummaryChip label="Quotes" value={`${selectedBundle.quotes.length} record${selectedBundle.quotes.length === 1 ? "" : "s"}`} onClick={() => setPage("quotes")} />
+          <SummaryChip label="Contracts" value={`${selectedBundle.contracts.length} record${selectedBundle.contracts.length === 1 ? "" : "s"}`} onClick={() => setPage("contracts")} />
+          <SummaryChip label="Invoices" value={`${selectedBundle.invoices.length} record${selectedBundle.invoices.length === 1 ? "" : "s"}`} onClick={() => setPage("invoices")} />
+          <SummaryChip label="Portal Access" value={selectedBundle.projectStatus.portalAccessSent ? "Sent" : selectedBundle.projectStatus.portalReady ? "Ready, not sent" : "Portal not available"} onClick={() => setPage("portal")} />
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-5">
+          <ClientRecordList title="Quotes" empty="No quotes yet." items={selectedBundle.quotes.map((quote) => ({ id: quote.id, title: quote.number, meta: `${formatCurrency(quote.total)} · ${quote.status}`, page: "quotes" }))} setPage={setPage} actionLabel="Start New Quote" actionPage="quotes" />
+          <ClientRecordList title="Contracts" empty="No contracts yet." items={selectedBundle.contracts.map((contract) => ({ id: contract.id, title: contract.number, meta: `${contract.templateName} · ${contract.status}`, page: "contracts" }))} setPage={setPage} actionLabel="New Contract" actionPage="contracts" />
+          <ClientRecordList title="Invoices" empty="No invoices yet." items={selectedBundle.invoices.map((invoice) => ({ id: invoice.id, title: invoice.number, meta: `${invoice.kind} · ${formatCurrency(invoice.balanceDue)} due · ${invoice.status}`, page: "invoices" }))} setPage={setPage} actionLabel="New Invoice" actionPage="invoices" />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+          <div className="rounded-3xl p-4" style={{ background: C.bg }}>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Original inquiry</p>
+              {selectedBundle.inquiry ? <Pill tone="info">source of truth</Pill> : <Pill tone="neutral">none</Pill>}
+            </div>
+            {selectedBundle.inquiry ? (
+              <>
+                <p className="text-sm" style={{ color: C.ink }}>{selectedBundle.inquiry.notes}</p>
+                <p className="text-xs mt-2" style={{ color: C.charcoal }}>{selectedBundle.inquiry.desiredDate || "TBD"} • {selectedBundle.inquiry.location || "No location"}</p>
+                <button onClick={() => setInquiryOpen(true)} className="mt-3 text-xs underline" style={{ color: C.forest }}>Open inquiry popup</button>
+              </>
+            ) : <p className="text-sm" style={{ color: C.taupe }}>No inquiry attached. This client was created manually.</p>}
+          </div>
+
+          <div className="rounded-3xl p-4" style={{ background: C.bg }}>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Portal access</p>
+              <Pill tone={selectedBundle.projectStatus.portalAccessSent ? "done" : "warn"}>{selectedBundle.projectStatus.portalAccessSent ? "sent" : "not sent"}</Pill>
+            </div>
+            {selectedBundle.projectStatus.portalReady ? (
+              <>
+                <p className="text-sm break-all" style={{ color: C.ink }}>{portalUrl}</p>
+                <div className="flex gap-2 mt-3">
+                  <button onClick={copyPortal} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: C.cream, color: C.ink }}>Copy link</button>
+                  <button onClick={() => setPage("portal")} className="px-3 py-2 rounded-full text-xs font-medium text-white" style={{ background: C.forest }}>Open portal</button>
+                </div>
+              </>
+            ) : <p className="text-sm" style={{ color: C.taupe }}>Portal not available until quote, contract, and deposit are complete.</p>}
           </div>
         </div>
-        <StatusLight tone={selectedBundle.booking.isBooked ? "green" : "yellow"} label={selectedBundle.booking.isBooked ? "Booked" : PIPELINE_LABELS[selectedBundle.stage]} />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
-        <SummaryChip label="Quotes" value={String(selectedBundle.quotes.length)} onClick={() => setPage("quotes")} />
-        <SummaryChip label="Contracts" value={String(selectedBundle.contracts.length)} onClick={() => setPage("contracts")} />
-        <SummaryChip label="Invoices" value={String(selectedBundle.invoices.length)} onClick={() => setPage("invoices")} />
-        <SummaryChip label="Portal Access" value={selectedBundle.projectStatus.portalAccessSent ? "Sent" : "Pending"} onClick={() => setPage("emails")} />
-      </div>
-      {selectedBundle.inquiry && (
-        <div className="rounded-3xl p-4 mb-5" style={{ background: C.bg }}>
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Original inquiry</p>
-            <Pill tone="info">source of truth</Pill>
-          </div>
-          <p className="text-sm" style={{ color: C.ink }}>{selectedBundle.inquiry.notes}</p>
-          <p className="text-xs mt-2" style={{ color: C.charcoal }}>
-            {selectedBundle.inquiry.budgetRange || "No budget"} • {selectedBundle.inquiry.desiredDate || "TBD"} • {selectedBundle.inquiry.location || "No location"}
-          </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <ActionCard title="Build quote" body="Start from the inquiry reference or create a manual quote." actionLabel="Open quotes" onClick={() => setPage("quotes")} />
+          <ActionCard title="Projects" body="Advanced Booking is now Projects. Manage prep, props, portal, gallery, and date selection here." actionLabel="Open projects" onClick={() => setPage("projects")} />
+          <ActionCard title="Payments and calendar" body="Track invoices, deposit, final balance, session date, and calendar invite." actionLabel="Open sessions" onClick={() => setPage("sessions")} />
+          <ActionCard title="Client messages" body="Read and reply to the client from inside the CRM." actionLabel="Open messages" onClick={() => setPage("clientMessages")} />
         </div>
+      </Card>
+      {inquiryOpen && selectedBundle.inquiry && (
+        <Modal title="Original Inquiry" onClose={() => setInquiryOpen(false)}>
+          <InquiryModalContent inquiry={selectedBundle.inquiry} />
+        </Modal>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ActionCard title="Build quote" body="Start from the inquiry package, budget, preferred date, and notes." actionLabel="Open quotes" onClick={() => setPage("quotes")} />
-        <ActionCard title="Advance booking" body="Project creation stays locked until quote, contract, and payment are complete." actionLabel="Open project flow" onClick={() => setPage("projects")} />
-        <ActionCard title="Payment and calendar" body="Track manual or Stripe payments, then send availability and ICS invite." actionLabel="Open sessions" onClick={() => setPage("sessions")} />
-        <ActionCard title="Portal content" body="Prepare the planning board once the booking gate has been met." actionLabel="Open portal" onClick={() => setPage("portal")} />
-      </div>
-    </Card>
+    </>
   );
 }
+
+function ClientRecordList({ title, empty, items, setPage, actionLabel, actionPage }) {
+  return (
+    <div className="rounded-3xl p-4" style={{ background: C.bg }}>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-medium" style={{ color: C.ink }}>{title}</p>
+        <button onClick={() => setPage(actionPage)} className="text-xs underline" style={{ color: C.forest }}>{actionLabel}</button>
+      </div>
+      <div className="space-y-2">
+        {items.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>{empty}</p>}
+        {items.map((item) => (
+          <button key={item.id} onClick={() => setPage(item.page)} className="w-full text-left rounded-2xl px-3 py-2.5" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+            <p className="text-sm font-medium" style={{ color: C.ink }}>{item.title}</p>
+            <p className="text-xs mt-1" style={{ color: C.charcoal }}>{item.meta}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InquiryModalContent({ inquiry }) {
+  return (
+    <div className="space-y-3 mt-4">
+      <InfoBlock label="Name" value={inquiry.name} />
+      <InfoBlock label="Session Type" value={inquiry.sessionType} />
+      <InfoBlock label="Preferred Date" value={inquiry.desiredDate || "TBD"} />
+      <InfoBlock label="Location" value={inquiry.location || "TBD"} />
+      <div className="rounded-2xl p-3" style={{ background: C.bg }}>
+        <p className="text-[10px] uppercase tracking-[0.25em] mb-1" style={{ color: C.taupe }}>Inquiry Notes</p>
+        <p className="text-sm leading-6" style={{ color: C.ink }}>{inquiry.notes || "No notes."}</p>
+      </div>
+    </div>
+  );
+}
+
 
 function ProjectsPage({ state, selectedBundle, actions, setPage }) {
   const [query, setQuery] = useState("");
@@ -1482,6 +1593,15 @@ function ProjectWorkspaceCard({ selectedBundle, actions, setPage }) {
               <SummaryChip label="Time" value={session?.sessionTime || "Awaiting selection"} />
               <SummaryChip label="Props" value={portal?.propList?.length ? `${portal.propList.length} listed` : "Not started"} />
               <SummaryChip label="Gallery" value={session?.galleryStatus === "delivered" ? "Delivered" : session?.galleryStatus === "ready_for_delivery" ? "Ready" : "Not ready"} />
+            </div>
+            <div className="mt-5 rounded-2xl p-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+              <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Manual date / time / location override</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <input type="date" value={toInputDate(session?.sessionDate)} onChange={(event) => actions.scheduleSession(selectedBundle.client.id, { date: fromInputDate(event.target.value), time: session?.sessionTime || "", locationId: session?.locationId, locationName: portal?.customLocation || selectedBundle.client.city })} className="px-3 py-2 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+                <input type="time" value={toInputTime(session?.sessionTime)} onChange={(event) => actions.scheduleSession(selectedBundle.client.id, { date: session?.sessionDate || fromInputDate(new Date().toISOString().slice(0,10)), time: fromInputTime(event.target.value), locationId: session?.locationId, locationName: portal?.customLocation || selectedBundle.client.city })} className="px-3 py-2 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+                <input value={portal?.customLocation || selectedBundle.client.city || ""} onChange={(event) => actions.scheduleSession(selectedBundle.client.id, { date: session?.sessionDate || "", time: session?.sessionTime || "", locationId: session?.locationId, locationName: event.target.value })} placeholder="Location or address" className="px-3 py-2 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+              </div>
+              {(portal?.customLocation || selectedBundle.client.city) && <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(portal?.customLocation || selectedBundle.client.city)}`} target="_blank" rel="noreferrer" className="inline-block text-xs underline mt-3" style={{ color: C.forest }}>Open in Maps</a>}
             </div>
           </>
         )}
@@ -1655,8 +1775,8 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
           <div className="rounded-3xl p-4 mt-5" style={{ background: C.bg }}>
             <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Quote workspace</p>
-                <p className="text-sm mt-1" style={{ color: C.charcoal }}>Inquiry → package → quote → email. Keep the client context here so you do not bounce between pages.</p>
+                <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Inquiry Reference</p>
+                <p className="text-sm mt-1" style={{ color: C.charcoal }}>Inquiry context feeds the quote. Manual quotes can stay blank here.</p>
               </div>
               {sourcePackage && <Pill tone="info">Default: {sourcePackage.name}</Pill>}
             </div>
@@ -1675,21 +1795,31 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
 
           <div className="h-px my-6" style={{ background: C.line }} />
 
-          <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Session Details</p>
+          <div className="rounded-3xl p-4 mb-5" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+            <p className="text-[10px] uppercase tracking-[0.25em] mb-2" style={{ color: C.taupe }}>Choose template</p>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => actions.addQuotePackageGroup(quote.id, null)} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: "#fff", color: C.ink, border: `1px solid ${C.line}` }}>Blank Quote</button>
+              {state.packages.map((pkg) => (
+                <button key={pkg.id} onClick={() => actions.addQuotePackageGroup(quote.id, pkg.id)} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: "#fff", color: C.ink, border: `1px solid ${C.line}` }}>{pkg.quoteTemplateName || pkg.name}</button>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Quote Details</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <Field label="Session date" value={quote.sessionDate} onChange={(value) => actions.patchQuote(quote.id, { sessionDate: value })} />
+            <Field label="Quote date" value={quote.createdAt || ""} onChange={(value) => actions.patchQuote(quote.id, { createdAt: value })} />
             <Field label="Location" value={quote.location} onChange={(value) => actions.patchQuote(quote.id, { location: value })} />
-            <Field label="Expiration" value={quote.expirationDate} onChange={(value) => actions.patchQuote(quote.id, { expirationDate: value })} />
+            <Field label="Expiration date" type="date" value={toInputDate(quote.expirationDate)} onChange={(value) => actions.patchQuote(quote.id, { expirationDate: fromInputDate(value) })} />
             <Field label="Discount" type="number" value={quote.discount} onChange={(value) => actions.patchQuote(quote.id, { discount: Number(value || 0) })} />
           </div>
 
-          <p className="text-[10px] uppercase tracking-[0.25em] mb-2" style={{ color: C.taupe }}>Notes to client</p>
+          <p className="text-[10px] uppercase tracking-[0.25em] mb-2" style={{ color: C.taupe }}>Internal Client Notes</p>
           <textarea rows={3} value={quote.notes || ""} onChange={(event) => actions.patchQuote(quote.id, { notes: event.target.value })} className="w-full rounded-2xl p-4 text-sm outline-none mb-6" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
 
           <div className="rounded-3xl p-4 mb-6" style={{ background: C.bg }}>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Package decision</p>
+                <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Packages</p>
                 <p className="text-xs mt-1" style={{ color: C.charcoal }}>These are the package boxes the client chooses from before accepting the quote.</p>
               </div>
               <button onClick={() => actions.addQuotePackageGroup(quote.id, selectedBundle.client?.packageId)} className="px-3 py-2 rounded-full text-xs font-medium text-white" style={{ background: C.forest }}>+ Pick-one group</button>
@@ -1718,7 +1848,7 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
                 </div>
                 <div className="grid grid-cols-2 gap-3 mt-3 max-w-xs">
                   <Field compact label="Qty" type="number" value={item.quantity} onChange={(value) => actions.patchQuoteItem(quote.id, item.id, { quantity: Number(value || 0) })} />
-                  <Field compact label="Unit price" type="number" value={item.unitPrice} onChange={(value) => actions.patchQuoteItem(quote.id, item.id, { unitPrice: Number(value || 0) })} />
+                  <Field compact label="Unit Price ($)" type="number" value={item.unitPrice} onChange={(value) => actions.patchQuoteItem(quote.id, item.id, { unitPrice: Number(value || 0) })} />
                 </div>
                 <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1757,8 +1887,8 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
           <div className="flex flex-wrap gap-2">
             <button onClick={() => { const d = buildEmailDraft("quote", selectedBundle); requestSend(d.subject, d.body, () => actions.sendQuote(quote.id)); }} className="px-4 py-2.5 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>Send quote</button>
             <button onClick={() => actions.viewQuote(quote.id)} className="px-4 py-2.5 rounded-full text-sm font-medium" style={{ background: "#edf2f5", color: C.blue }}>Mark viewed</button>
-            <button onClick={() => actions.acceptQuote(quote.id)} className="px-4 py-2.5 rounded-full text-sm font-medium" style={{ background: "#eaf1ee", color: C.forest }}>Accept</button>
-            <button onClick={() => actions.declineQuote(quote.id)} className="px-4 py-2.5 rounded-full text-sm font-medium" style={{ background: "#f8ece8", color: C.red }}>Decline</button>
+            <button disabled={quote.status === "accepted"} onClick={() => actions.acceptQuote(quote.id)} className="px-4 py-2.5 rounded-full text-sm font-medium disabled:opacity-100" style={{ background: quote.status === "accepted" ? C.forest : "#eaf1ee", color: quote.status === "accepted" ? "#fff" : C.forest }}>{quote.status === "accepted" ? "Accepted" : "Accept"}</button>
+            <button disabled={quote.status === "accepted"} onClick={() => actions.declineQuote(quote.id)} className="px-4 py-2.5 rounded-full text-sm font-medium disabled:opacity-40" style={{ background: "#f8ece8", color: C.red }}>Decline</button>
             {quote.status === "accepted" && (
               <button onClick={() => setPage("contracts")} className="px-4 py-2.5 rounded-full text-sm font-medium flex items-center gap-1" style={{ background: C.charcoal, color: "#fff" }}>
                 {selectedBundle.primaryContract ? "View contract" : "Generate contract"} <ChevronRight size={12} />
@@ -1787,7 +1917,7 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
           </div>
           <div className="space-y-2 mt-6 text-sm">
             <PriceRow label="Subtotal" value={formatCurrency(quote.subtotal)} />
-            <PriceRow label="Discount" value={formatCurrency(quote.discount)} />
+            {quote.discount > 0 && <PriceRow label="Discount" value={formatCurrency(quote.discount)} />}
             <PriceRow label="Tax" value={formatCurrency(quote.tax)} />
             <PriceRow strong label="Total" value={formatCurrency(quote.total)} />
           </div>
@@ -1987,6 +2117,7 @@ function inlineFormat(value) {
 }
 
 function renderRichText(text) {
+  if (/<(p|ul|ol|li|strong|em|br)\b/i.test(text || "")) return text;
   const lines = escapeHtml(text).split("\n");
   let html = "";
   let listType = null;
@@ -2014,46 +2145,40 @@ const RichText = ({ text, className, style }) => (
 
 function DescriptionEditor({ value, onChange }) {
   const ref = useRef(null);
+  const html = renderRichText(value || "");
 
-  const wrapSelection = (marker) => {
-    const el = ref.current;
-    if (!el) return;
-    const { selectionStart, selectionEnd } = el;
-    const selected = value.slice(selectionStart, selectionEnd) || "text";
-    const next = value.slice(0, selectionStart) + marker + selected + marker + value.slice(selectionEnd);
-    onChange(next);
-  };
+  useEffect(() => {
+    if (ref.current && ref.current.innerHTML !== html) ref.current.innerHTML = html;
+  }, [html]);
 
-  const prefixLine = (prefix) => {
-    const el = ref.current;
-    if (!el) return;
-    const { selectionStart } = el;
-    const lineStart = value.lastIndexOf("\n", selectionStart - 1) + 1;
-    const next = value.slice(0, lineStart) + prefix + value.slice(lineStart);
-    onChange(next);
+  const command = (cmd) => {
+    if (typeof document === "undefined") return;
+    ref.current?.focus();
+    document.execCommand(cmd, false, null);
+    onChange(ref.current?.innerHTML || "");
   };
 
   return (
     <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
       <div className="flex items-center gap-1 px-2 py-1.5" style={{ background: C.bg, borderBottom: `1px solid ${C.line}` }}>
-        <button type="button" onClick={() => wrapSelection("**")} className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs" style={{ color: C.ink }}>B</button>
-        <button type="button" onClick={() => wrapSelection("*")} className="w-7 h-7 rounded-lg flex items-center justify-center italic text-xs" style={{ color: C.ink }}>I</button>
-        <button type="button" onClick={() => prefixLine("- ")} className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ color: C.ink }}><ListChecks size={13} /></button>
-        <button type="button" onClick={() => prefixLine("1. ")} className="w-7 h-7 rounded-lg flex items-center justify-center text-xs" style={{ color: C.ink }}>1.</button>
-        <span className="text-[10px] ml-1" style={{ color: C.taupe }}>Select text, then Bold/Italic. Bullets and numbers apply to the current line.</span>
+        <button type="button" onClick={() => command("bold")} className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs" style={{ color: C.ink }}>B</button>
+        <button type="button" onClick={() => command("italic")} className="w-7 h-7 rounded-lg flex items-center justify-center italic text-xs" style={{ color: C.ink }}>I</button>
+        <button type="button" onClick={() => command("insertUnorderedList")} className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ color: C.ink }}><ListChecks size={13} /></button>
+        <button type="button" onClick={() => command("insertOrderedList")} className="w-7 h-7 rounded-lg flex items-center justify-center text-xs" style={{ color: C.ink }}>1.</button>
+        <span className="text-[10px] ml-1" style={{ color: C.taupe }}>Formatted editor. No markdown symbols needed.</span>
       </div>
-      <textarea
+      <div
         ref={ref}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        rows={Math.max(3, value.split("\n").length + 1)}
-        className="w-full px-3 py-2.5 text-sm outline-none resize-y"
-        style={{ color: C.ink }}
-        placeholder="Describe this item. It can grow as long as you need."
+        contentEditable
+        suppressContentEditableWarning
+        onInput={() => onChange(ref.current?.innerHTML || "")}
+        className="w-full min-h-[96px] px-3 py-2.5 text-sm outline-none"
+        style={{ color: C.ink, background: "#fff" }}
       />
     </div>
   );
 }
+
 
 function QuoteOptionGroupEditor({ quote, group, actions }) {
   const selected = new Set(group.selectedOptionIds || []);
@@ -2076,7 +2201,7 @@ function QuoteOptionGroupEditor({ quote, group, actions }) {
         {(group.options || []).map((option) => (
           <div key={option.id} className="rounded-2xl p-3" style={{ background: C.bg }}>
             <div className="flex items-center gap-2 mb-2">
-              <button onClick={() => actions.selectQuoteOption(quote.id, group.id, option.id, !selected.has(option.id))} className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center" style={{ border: `1px solid ${selected.has(option.id) ? C.forest : C.taupe}`, background: selected.has(option.id) ? C.forest : "#fff" }}>
+              <button onClick={() => actions.selectQuoteOption(quote.id, group.id, option.id, !selected.has(option.id))} className="w-5 h-5 rounded-md shrink-0 flex items-center justify-center" style={{ border: `1px solid ${selected.has(option.id) ? C.forest : C.taupe}`, background: selected.has(option.id) ? C.forest : "#fff" }}>
                 {selected.has(option.id) && <Check size={12} color="#fff" />}
               </button>
               <p className="text-xs" style={{ color: C.charcoal }}>Selected option affects the quote total</p>
@@ -2085,8 +2210,8 @@ function QuoteOptionGroupEditor({ quote, group, actions }) {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-[1fr_110px_110px] gap-2 mb-2">
               <Field compact label="Package name" value={option.name || ""} onChange={(value) => actions.patchQuoteOption(quote.id, group.id, option.id, { name: value })} />
-              <Field compact label="Qty" type="number" value={option.quantity || 1} onChange={(value) => actions.patchQuoteOption(quote.id, group.id, option.id, { quantity: Number(value || 0) })} />
-              <Field compact label="Price" type="number" value={option.unitPrice || 0} onChange={(value) => actions.patchQuoteOption(quote.id, group.id, option.id, { unitPrice: Number(value || 0) })} />
+              <Field compact label="Badge" value={option.badge || ""} onChange={(value) => actions.patchQuoteOption(quote.id, group.id, option.id, { badge: value })} />
+              <Field compact label="Price ($)" type="number" value={option.unitPrice || 0} onChange={(value) => actions.patchQuoteOption(quote.id, group.id, option.id, { unitPrice: Number(value || 0) })} />
             </div>
             <DescriptionEditor value={option.description || ""} onChange={(value) => actions.patchQuoteOption(quote.id, group.id, option.id, { description: value })} />
           </div>
@@ -2108,7 +2233,7 @@ function QuoteOptionGroupPreview({ group, quote, actions, readOnly = false }) {
         </div>
         <Pill tone={group.required ? "warn" : "neutral"}>{group.selectionMode === "multiple" ? "choose options" : "choose one"}</Pill>
       </div>
-      <div className="space-y-2 mt-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
         {(group.options || []).map((option) => {
           const isSelected = selected.has(option.id);
           return (
@@ -2120,12 +2245,15 @@ function QuoteOptionGroupPreview({ group, quote, actions, readOnly = false }) {
               style={{ background: isSelected ? "#fff" : "rgba(255,255,255,0.55)", border: `1px solid ${isSelected ? C.forest : C.line}` }}
             >
               <div className="flex items-start gap-3">
-                <span className="w-5 h-5 rounded-full mt-0.5 shrink-0 flex items-center justify-center" style={{ border: `1px solid ${isSelected ? C.forest : C.taupe}`, background: isSelected ? C.forest : "#fff" }}>
+                <span className="w-5 h-5 rounded-md mt-0.5 shrink-0 flex items-center justify-center" style={{ border: `1px solid ${isSelected ? C.forest : C.taupe}`, background: isSelected ? C.forest : "#fff" }}>
                   {isSelected && <Check size={12} color="#fff" />}
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-medium" style={{ color: C.ink }}>{option.name}</p>
+                    <div>
+                      {option.badge && <Pill tone="done">{option.badge}</Pill>}
+                      <p className="text-sm font-medium mt-1" style={{ color: C.ink }}>{option.name}</p>
+                    </div>
                     <p className="text-sm shrink-0" style={{ color: C.ink }}>{formatCurrency((option.quantity || 1) * (option.unitPrice || 0))}</p>
                   </div>
                   <RichText text={option.description} className="text-xs mt-1" style={{ color: C.charcoal }} />
@@ -2253,7 +2381,12 @@ function ContractsPage({ state, selectedBundle, actions, setPage }) {
         {contract && (
           <div className="mt-5 space-y-3">
             <SummaryChip label="Contract No." value={contract.number} />
-            <SummaryChip label="Template" value={contract.templateName} onClick={() => setPage("templates")} />
+            <div className="rounded-2xl p-4" style={{ background: C.bg }}>
+              <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Template</p>
+              <select value={contract.templateName} onChange={(event) => actions.patchContract(contract.id, { templateName: event.target.value })} className="mt-2 w-full px-3 py-2 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+                {["Standard Photography Agreement", "Wedding Agreement", "Branding Agreement", "Event Agreement", "Milestone Package Agreement"].map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </div>
             <SummaryChip label="Status" value={contract.status} />
             <SummaryChip label="Drafted" value={contract.createdAt} />
             <div className="flex flex-wrap gap-2">
@@ -2303,10 +2436,16 @@ function ContractsPage({ state, selectedBundle, actions, setPage }) {
               </div>
             </div>
 
+            <div className="flex flex-wrap gap-2 mb-5">
+              <button onClick={() => actions.patchContract(contract.id, { clauses: [...(contract.clauses || []), { id: `clause_${Date.now()}`, title: `${(contract.clauses || []).length + 1}. New Section`, body: "Write clause text here." }] })} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: C.cream, color: C.ink }}>+ Add section</button>
+            </div>
             <div className="space-y-7">
               {(contract.clauses || []).map((clause) => (
                 <div key={clause.id}>
-                  <p className="ecc-display text-lg mb-1.5" style={{ color: C.ink }}>{clause.title}</p>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <input value={clause.title} onChange={(event) => actions.patchContract(contract.id, { clauses: contract.clauses.map((entry) => (entry.id === clause.id ? { ...entry, title: event.target.value } : entry)) })} className="ecc-display text-lg flex-1 bg-transparent outline-none" style={{ color: C.ink }} />
+                    <button onClick={() => actions.patchContract(contract.id, { clauses: contract.clauses.filter((entry) => entry.id !== clause.id) })} className="text-xs" style={{ color: C.red }}>Remove</button>
+                  </div>
                   <textarea
                     rows={3}
                     value={clause.body}
@@ -2325,7 +2464,7 @@ function ContractsPage({ state, selectedBundle, actions, setPage }) {
                     {contract.signerName || ""}
                   </p>
                 </div>
-                <p className="text-xs mt-2" style={{ color: C.taupe }}>Client signature · {contract.signedAt || "Awaiting signature"}</p>
+                <p className="text-xs mt-2" style={{ color: C.taupe }}>Client signature box · mouse, finger, or trackpad · {contract.signedAt || "Awaiting signature"}</p>
               </div>
               <div>
                 <div className="h-10 flex items-end" style={{ borderBottom: `1px solid ${C.ink}` }}>
@@ -2415,7 +2554,9 @@ function InvoicesPage({ state, selectedBundle, actions, setPage }) {
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Card");
   const [previewOpen, setPreviewOpen] = useState(false);
-  const invoice = selectedBundle.primaryInvoice;
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
+  const invoice = selectedBundle.invoices.find((entry) => entry.id === selectedInvoiceId) || selectedBundle.primaryInvoice;
+  const invoiceLocked = Boolean(invoice?.status === "paid" || invoice?.locked);
   const { requestSend, modal: emailModal } = useEmailGate(actions, selectedBundle.client?.id);
 
   if (!selectedBundle.client) {
@@ -2441,11 +2582,11 @@ function InvoicesPage({ state, selectedBundle, actions, setPage }) {
         </div>
         <div className="space-y-2">
           {selectedBundle.invoices.map((entry) => (
-            <div key={entry.id} className="w-full p-3 rounded-xl" style={{ background: C.cream, border: `1px solid ${C.line}` }}>
+            <button key={entry.id} onClick={() => setSelectedInvoiceId(entry.id)} className="w-full p-3 rounded-xl text-left" style={{ background: invoice?.id === entry.id ? C.cream : "#fff", border: `1px solid ${invoice?.id === entry.id ? C.forest : C.line}` }}>
               <p className="text-sm font-medium" style={{ color: C.ink }}>{entry.number}</p>
               <p className="text-xs mt-1" style={{ color: C.charcoal }}>{entry.kind} • {formatCurrency(entry.total)}</p>
               <Pill tone={statusTone(entry.status)}>{entry.status}</Pill>
-            </div>
+            </button>
           ))}
         </div>
       </Card>
@@ -2462,6 +2603,8 @@ function InvoicesPage({ state, selectedBundle, actions, setPage }) {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Pill tone={statusTone(invoice.status)}>{invoice.status}</Pill>
+              {invoiceLocked && <Pill tone="warn">locked</Pill>}
+              {invoice?.locked && invoice.status !== "paid" && <button onClick={() => actions.patchInvoice(invoice.id, { locked: false })} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: C.cream, color: C.ink }}>Unlock edit</button>}
               <button onClick={() => setPreviewOpen(true)} className="px-3 py-2 rounded-full text-xs font-medium flex items-center gap-1.5" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
                 <Eye size={13} /> Preview
               </button>
@@ -2476,7 +2619,7 @@ function InvoicesPage({ state, selectedBundle, actions, setPage }) {
             <SummaryChip label="Balance" value={formatCurrency(invoice.balanceDue)} />
             <div>
               <p className="text-[10px] uppercase tracking-[0.25em] mb-1" style={{ color: C.taupe }}>Due date</p>
-              <input type="date" value={invoice.dueDate || ""} onChange={(event) => actions.patchInvoice(invoice.id, { dueDate: event.target.value })} className="w-full rounded-2xl px-3 py-2.5 text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink, background: "#fff" }} />
+              <input type="date" value={toInputDate(invoice.dueDate)} onChange={(event) => actions.patchInvoice(invoice.id, { dueDate: fromInputDate(event.target.value) })} className="w-full rounded-2xl px-3 py-2.5 text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink, background: "#fff" }} />
             </div>
           </div>
 
@@ -2493,7 +2636,7 @@ function InvoicesPage({ state, selectedBundle, actions, setPage }) {
                 </div>
                 <div className="grid grid-cols-2 gap-3 mt-3 max-w-xs">
                   <Field compact label="Qty" type="number" value={item.quantity} onChange={(value) => actions.patchInvoiceItem(invoice.id, item.id, { quantity: Number(value || 0) })} />
-                  <Field compact label="Unit price" type="number" value={item.unitPrice} onChange={(value) => actions.patchInvoiceItem(invoice.id, item.id, { unitPrice: Number(value || 0) })} />
+                  <Field compact label="Unit Price ($)" type="number" value={item.unitPrice} onChange={(value) => actions.patchInvoiceItem(invoice.id, item.id, { unitPrice: Number(value || 0) })} />
                 </div>
                 <div className="flex items-center justify-end mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
                   <button onClick={() => actions.removeInvoiceItem(invoice.id, item.id)} className="text-xs" style={{ color: C.red }}>Remove</button>
@@ -2504,12 +2647,13 @@ function InvoicesPage({ state, selectedBundle, actions, setPage }) {
           <div className="flex flex-wrap items-center gap-2 mb-7">
             <button onClick={() => actions.addInvoiceItem(invoice.id)} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: C.cream, color: C.ink }}>+ Blank item</button>
             <CatalogPicker label="+ Add package" options={state.packages} onPick={(pkg) => actions.addInvoiceCatalogItem(invoice.id, { name: pkg.name, description: pkg.description, unitPrice: pkg.price })} />
+            {invoice.kind === "final" && <CatalogPicker label="+ Rush delivery" options={state.addons.filter((addon) => addon.name.toLowerCase().includes("rush"))} onPick={(addon) => actions.addInvoiceCatalogItem(invoice.id, { name: addon.name, description: addon.description, unitPrice: addon.price })} />}
             <span className="text-xs" style={{ color: C.taupe }}>Packages add as a new item below — edit the price to match what was actually billed.</span>
           </div>
 
           <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Send &amp; Collect</p>
           <div className="flex flex-wrap items-center gap-2 mb-6">
-            <button onClick={() => { const d = buildEmailDraft("invoice", selectedBundle); requestSend(d.subject, d.body, () => actions.sendInvoice(invoice.id)); }} className="px-4 py-2.5 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>
+            <button disabled={invoice.status === "paid"} onClick={() => { const d = buildEmailDraft("invoice", selectedBundle); requestSend(d.subject, d.body, () => actions.sendInvoice(invoice.id)); }} className="px-4 py-2.5 rounded-full text-sm font-medium text-white disabled:opacity-40" style={{ background: C.forest }}>
               Send invoice
             </button>
             <button onClick={() => { const d = buildEmailDraft("reminder", selectedBundle); requestSend(d.subject, d.body, () => actions.sendBookingReminder(selectedBundle.client.id)); }} className="px-4 py-2.5 rounded-full text-sm font-medium" style={{ background: "#f8ece8", color: C.red }}>
@@ -2823,12 +2967,34 @@ function SessionsPage({ state, selectedBundle, actions, setPage }) {
             <button onClick={() => setPage("calendar")} className="text-xs underline" style={{ color: C.forest }}>View on calendar</button>
             <span style={{ color: C.line }}>·</span>
             <button onClick={() => setPage("projects")} className="text-xs underline" style={{ color: C.forest }}>Open project workspace</button>
+            <span style={{ color: C.line }}>·</span>
+            <button onClick={() => setPage("quotes")} className="text-xs underline" style={{ color: C.forest }}>View related quote</button>
+            <span style={{ color: C.line }}>·</span>
+            <button onClick={() => setPage("contracts")} className="text-xs underline" style={{ color: C.forest }}>View related contract</button>
+            <span style={{ color: C.line }}>·</span>
+            <button onClick={() => setPage("invoices")} className="text-xs underline" style={{ color: C.forest }}>View related invoice</button>
+            <span style={{ color: C.line }}>·</span>
+            <button onClick={() => setPage("portal")} className="text-xs underline" style={{ color: C.forest }}>View client portal</button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
             <SummaryChip label="Date" value={session.sessionDate || "Not set"} />
             <SummaryChip label="Time" value={session.sessionTime || "Not set"} />
             <SummaryChip label="Availability Email" value={selectedBundle.projectStatus.availabilitySent ? "Sent" : "Pending"} />
             <SummaryChip label="ICS Invite" value={selectedBundle.projectStatus.calendarInviteSent ? "Sent" : "Pending"} />
+          </div>
+
+          <div className="rounded-3xl p-4 mb-5" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+            <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Edit session date, time, and location</p>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <input type="date" value={toInputDate(session.sessionDate)} onChange={(event) => actions.patchSession(session.id, { sessionDate: fromInputDate(event.target.value), status: "scheduled", prepStatus: "scheduled" })} className="px-3 py-2 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+              <input type="time" value={toInputTime(session.sessionTime)} onChange={(event) => actions.patchSession(session.id, { sessionTime: fromInputTime(event.target.value), status: "scheduled", prepStatus: "scheduled" })} className="px-3 py-2 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+              <select value={session.locationId || "custom"} onChange={(event) => actions.patchSession(session.id, { locationId: event.target.value, locationName: state.locations.find((location) => location.id === event.target.value)?.name })} className="px-3 py-2 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+                <option value="custom">Custom location</option>
+                {state.locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+              </select>
+              <Field compact value={selectedBundle.portal?.customLocation || selectedBundle.client?.city || ""} onChange={(value) => actions.patchSession(session.id, { locationName: value })} />
+            </div>
+            {(selectedBundle.portal?.customLocation || selectedBundle.client?.city) && <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedBundle.portal?.customLocation || selectedBundle.client?.city)}`} target="_blank" rel="noreferrer" className="inline-block text-xs underline mt-3" style={{ color: C.forest }}>Open in Maps</a>}
           </div>
           {session.status === "awaiting_schedule" && (
             <div className="mb-5">
@@ -2865,7 +3031,8 @@ function SessionsPage({ state, selectedBundle, actions, setPage }) {
               </button>
             </div>
           )}
-          <textarea readOnly rows={4} value={session.notes || ""} className="w-full rounded-2xl p-3 text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+          <p className="text-[10px] uppercase tracking-[0.25em] mb-2" style={{ color: C.taupe }}>Internal Notes</p>
+          <textarea rows={4} value={session.notes || ""} onChange={(event) => actions.patchSession(session.id, { notes: event.target.value })} className="w-full rounded-2xl p-3 text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
           <button onClick={() => actions.completeSession(session.id)} className="mt-4 px-4 py-3 rounded-xl text-sm font-medium text-white" style={{ background: C.charcoal }}>
             Mark session complete
           </button>
@@ -2889,6 +3056,10 @@ function PortalPage({ selectedBundle, actions, setApp, setPage }) {
   const update = (patch) => actions.updatePortal(selectedBundle.client.id, patch);
   const addProp = () => update({ propList: [...(portal.propList || []), ""] });
   const removeProp = (index) => update({ propList: portal.propList.filter((_, itemIndex) => itemIndex !== index) });
+  const planSteps = portal.planPrepSteps || [];
+  const addPlanStep = () => update({ planPrepSteps: [...planSteps, { id: `step_${Date.now()}`, title: "New prep step", body: "Write what the client needs to know.", status: "pending" }] });
+  const patchPlanStep = (id, patch) => update({ planPrepSteps: planSteps.map((step) => step.id === id ? { ...step, ...patch } : step) });
+  const removePlanStep = (id) => update({ planPrepSteps: planSteps.filter((step) => step.id !== id) });
 
   return (
     <div className="space-y-5">
@@ -2945,7 +3116,7 @@ function PortalPage({ selectedBundle, actions, setApp, setPage }) {
             <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Prop list</p>
             <button onClick={addProp} className="text-xs font-medium flex items-center gap-1" style={{ color: C.forest }}><Plus size={12} /> Add prop</button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
             {(portal.propList || []).map((prop, index) => (
               <div key={index} className="flex items-center gap-2">
                 <Field compact value={prop} onChange={(value) => update({ propList: portal.propList.map((item, itemIndex) => (itemIndex === index ? value : item)) })} />
@@ -2953,6 +3124,29 @@ function PortalPage({ selectedBundle, actions, setApp, setPage }) {
               </div>
             ))}
           </div>
+        </div>
+      </Card>
+
+      <Card className="p-5">
+        <SectionLabel icon={CheckCircle2}>Editable Plan &amp; Prep Page</SectionLabel>
+        <p className="text-sm px-5 pb-4" style={{ color: C.charcoal }}>This controls what the client sees under Plan & Prep. Use it for milestone packages, awaiting date selection, prep notes, and delivery steps.</p>
+        <div className="px-5 pb-5 space-y-3">
+          {planSteps.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>No plan steps yet.</p>}
+          {planSteps.map((step) => (
+            <div key={step.id} className="rounded-2xl p-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_150px_auto] gap-2 mb-2">
+                <Field compact value={step.title || ""} onChange={(value) => patchPlanStep(step.id, { title: value })} />
+                <select value={step.status || "pending"} onChange={(event) => patchPlanStep(step.id, { status: event.target.value })} className="px-3 py-2 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+                  <option value="complete">Complete</option>
+                  <option value="active">Active</option>
+                  <option value="pending">Pending</option>
+                </select>
+                <button onClick={() => removePlanStep(step.id)} className="text-xs" style={{ color: C.red }}>Remove</button>
+              </div>
+              <textarea rows={2} value={step.body || ""} onChange={(event) => patchPlanStep(step.id, { body: event.target.value })} className="w-full rounded-xl p-3 text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+            </div>
+          ))}
+          <button onClick={addPlanStep} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: C.cream, color: C.ink }}>+ Add Plan & Prep step</button>
         </div>
       </Card>
 
@@ -2971,6 +3165,7 @@ function PortalPage({ selectedBundle, actions, setApp, setPage }) {
         <div className="px-5 pt-4 space-y-3">
           <Field label="Gallery title" value={portal.galleryLink?.title || ""} onChange={(value) => update({ galleryLink: { ...portal.galleryLink, title: value } })} />
           <Field label="Gallery URL (Pixieset link)" value={portal.galleryLink?.url || ""} onChange={(value) => update({ galleryLink: { ...portal.galleryLink, url: value } })} />
+          <Field label="Print Store Link (Pixieset store)" value={portal.printStoreLink || ""} onChange={(value) => update({ printStoreLink: value })} />
         </div>
         <div className="px-5 pt-2">
           <p className="text-[10px] uppercase tracking-[0.25em] mb-2" style={{ color: C.taupe }}>Preview image (optional)</p>
@@ -2990,6 +3185,14 @@ function PortalPage({ selectedBundle, actions, setApp, setPage }) {
           <div className="px-5 pt-4">
             <p className="text-[10px] uppercase tracking-[0.25em] mb-2" style={{ color: C.taupe }}>Preview — this is what the client will see</p>
             <GalleryLinkCard galleryLink={portal.galleryLink} />
+          </div>
+        )}
+        {portal.printStoreLink && (
+          <div className="px-5 pt-4">
+            <a href={portal.printStoreLink} target="_blank" rel="noreferrer" className="block rounded-2xl p-4" style={{ background: C.cream, color: C.ink, border: `1px solid ${C.line}` }}>
+              <p className="text-sm font-medium">Print Your Album</p>
+              <p className="text-xs mt-1" style={{ color: C.charcoal }}>Order prints and shop the Pixieset store link.</p>
+            </a>
           </div>
         )}
 
@@ -3156,6 +3359,73 @@ function BrandingPage({ state, actions }) {
   );
 }
 
+function ClientMessagesPage({ state, selectedBundle, actions, setPage }) {
+  const [draft, setDraft] = useState("");
+  const conversations = state.clients
+    .map((client) => {
+      const messages = (state.messages || []).filter((message) => message.clientId === client.id);
+      const latest = messages[0];
+      const unread = messages.filter((message) => message.from === "client" && !message.readAt).length;
+      return { client, messages, latest, unread };
+    })
+    .filter((row) => row.messages.length > 0 || row.client.id === state.selectedClientId)
+    .sort((a, b) => String(b.latest?.createdAt || "").localeCompare(String(a.latest?.createdAt || "")));
+
+  const thread = selectedBundle.client ? (state.messages || []).filter((message) => message.clientId === selectedBundle.client.id) : [];
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-5">
+      <Card className="p-4">
+        <SectionLabel icon={MessageCircle}>Client Messages</SectionLabel>
+        <div className="space-y-2">
+          {conversations.length === 0 && <p className="text-sm px-5 pb-5" style={{ color: C.taupe }}>No client conversations yet.</p>}
+          {conversations.map(({ client, latest, unread, messages }) => (
+            <button key={client.id} onClick={() => actions.selectClient(client.id)} className="w-full p-3 rounded-2xl text-left" style={{ background: client.id === state.selectedClientId ? C.cream : "#fff", border: `1px solid ${C.line}` }}>
+              <div className="flex items-center gap-3">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ background: unread ? C.forest : C.line }} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate" style={{ color: C.ink }}>{client.name}</p>
+                  <p className="text-xs truncate mt-0.5" style={{ color: C.charcoal }}>{latest?.text || "No messages yet."}</p>
+                </div>
+                <Pill tone={unread ? "done" : "neutral"}>{unread || messages.length}</Pill>
+              </div>
+              <p className="text-[11px] mt-2" style={{ color: C.taupe }}>{latest?.createdAt || "New thread"}</p>
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="p-5">
+        {!selectedBundle.client ? (
+          <EmptyState title="Select a conversation" body="Pick a client thread to read and reply." />
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <p className="ecc-display text-3xl" style={{ color: C.ink }}>{selectedBundle.client.name}</p>
+                <p className="text-sm" style={{ color: C.charcoal }}>{selectedBundle.client.sessionType}</p>
+              </div>
+              <button onClick={() => setPage("clients")} className="text-xs underline" style={{ color: C.forest }}>Open client record</button>
+            </div>
+            <div className="space-y-3 mb-4 max-h-[520px] overflow-y-auto ecc-scrollbar pr-1">
+              {thread.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>No messages in this thread yet.</p>}
+              {thread.slice().reverse().map((message) => (
+                <div key={message.id} className="max-w-[82%] rounded-2xl px-4 py-3" style={{ marginLeft: message.from === "studio" ? "auto" : 0, background: message.from === "studio" ? C.forest : C.bg, color: message.from === "studio" ? "#fff" : C.ink }}>
+                  <p className="text-sm leading-6">{message.text}</p>
+                  <p className="text-[11px] mt-2" style={{ color: message.from === "studio" ? "rgba(255,255,255,0.75)" : C.taupe }}>{message.createdAt}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && draft.trim()) { actions.sendMessage(selectedBundle.client.id, draft, "studio"); setDraft(""); } }} placeholder="Reply to client..." className="flex-1 px-4 py-3 rounded-full text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+              <button onClick={() => { actions.sendMessage(selectedBundle.client.id, draft, "studio"); setDraft(""); }} className="w-11 h-11 rounded-full flex items-center justify-center text-white" style={{ background: C.forest }}><Send size={16} /></button>
+            </div>
+          </>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 function EmailsPage({ selectedBundle, actions, setPage }) {
   const { requestSend, modal: emailModal } = useEmailGate(actions, selectedBundle.client?.id);
 
@@ -3305,6 +3575,7 @@ function CalendarPage({ state, selectedBundle, actions, setPage }) {
         >
           <CalendarDays size={13} /> {editingAvailability ? "Done editing availability" : "Edit Availability"}
         </button>
+        <p className="text-[11px]" style={{ color: C.taupe }}>Last edited: {state.availabilityLastEditedAt || "Not yet"}</p>
       </Card>
 
       {view === "list" ? (
@@ -3359,7 +3630,7 @@ function CalendarPage({ state, selectedBundle, actions, setPage }) {
                 })}
               </div>
             ) : (
-              <div className="max-w-md mx-auto lg:mx-0">
+              <div className="w-full">
                 <div className="grid grid-cols-7 gap-1 text-xs mt-4 mb-1">
                   {["S", "M", "T", "W", "T", "F", "S"].map((label, index) => (
                     <div key={index} className="text-center font-medium pb-1" style={{ color: C.taupe }}>{label}</div>
@@ -3374,11 +3645,12 @@ function CalendarPage({ state, selectedBundle, actions, setPage }) {
                       <button
                         key={day}
                         onClick={() => setSelected(day)}
-                        className="aspect-square rounded-full flex items-center justify-center text-sm relative"
-                        style={{ background: isSelected ? C.forest : has ? C.cream : slots > 0 ? "#eef0e3" : "transparent", color: isSelected ? "#fff" : C.ink }}
+                        className="min-h-24 rounded-2xl p-2 text-left text-sm relative"
+                        style={{ background: isSelected ? C.forest : has ? C.cream : slots > 0 ? "#eef0e3" : "#fff", color: isSelected ? "#fff" : C.ink, border: `1px solid ${C.line}` }}
                       >
-                        {day}
-                        {has && !isSelected && <span className="absolute bottom-1 w-1 h-1 rounded-full" style={{ background: C.forest }} />}
+                        <p className="font-medium">{day}</p>
+                        {has && has.slice(0,2).map((event, index) => <p key={index} className="text-[10px] mt-1 truncate" style={{ color: isSelected ? C.cream : C.forest }}>{event.title}</p>)}
+                        {slots > 0 && <p className="text-[10px] mt-1" style={{ color: isSelected ? C.cream : C.taupe }}>{slots} open slot{slots === 1 ? "" : "s"}</p>}
                       </button>
                     );
                   })}
@@ -4078,12 +4350,138 @@ function TemplatesPage() {
   );
 }
 
+function SettingsPage({ state, actions }) {
+  const [locationDraft, setLocationDraft] = useState({ name: "", city: "Miami, FL", address: "" });
+  const mergeFields = ["{{client_name}}", "{{session_type}}", "{{quote_total}}", "{{quote_number}}", "{{invoice_number}}", "{{invoice_total}}", "{{contract_title}}", "{{portal_link}}", "{{session_date}}", "{{session_time}}", "{{location}}", "{{business_name}}", "{{gallery_link}}", "{{print_store_link}}"];
+  const emailTemplates = state.emailTemplates || [];
+  const addLocation = () => {
+    if (!locationDraft.name.trim()) return;
+    actions.addLocation(locationDraft);
+    setLocationDraft({ name: "", city: "Miami, FL", address: "" });
+  };
+  return (
+    <div className="space-y-5">
+      <Card className="p-5">
+        <SectionLabel icon={SettingsIcon}>Settings</SectionLabel>
+        <p className="text-sm px-5 pb-4" style={{ color: C.charcoal }}>Global CRM configuration lives here instead of scattered across quote, contract, portal, and calendar screens.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 px-5 pb-5">
+          {["Email Templates", "Locations", "Calendar Connections", "Quote Templates", "Contract Templates", "Add-ons", "Portal Defaults"].map((label) => (
+            <div key={label} className="rounded-2xl p-4" style={{ background: C.bg }}>
+              <p className="text-sm font-medium" style={{ color: C.ink }}>{label}</p>
+              <p className="text-xs mt-1" style={{ color: C.taupe }}>Editable global defaults</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="p-5">
+        <SectionLabel icon={Mail}>Email Templates</SectionLabel>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4 px-5 pb-5">
+          <div className="space-y-2">
+            {emailTemplates.map((template) => (
+              <div key={template.key} className="rounded-2xl p-4" style={{ border: `1px solid ${C.line}` }}>
+                <p className="text-sm font-medium" style={{ color: C.ink }}>{template.name}</p>
+                <Field label="Subject" value={template.subject || ""} onChange={(value) => actions.updateEmailTemplate(template.key, { subject: value })} />
+                <textarea rows={4} value={template.body || ""} onChange={(event) => actions.updateEmailTemplate(template.key, { body: event.target.value })} className="mt-2 w-full rounded-xl p-3 text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+              </div>
+            ))}
+          </div>
+          <div className="rounded-2xl p-4 h-fit" style={{ background: C.bg }}>
+            <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Available merge fields</p>
+            <div className="flex flex-wrap gap-2">
+              {mergeFields.map((field) => <Pill key={field} tone="info">{field}</Pill>)}
+            </div>
+            <p className="text-xs mt-4" style={{ color: C.charcoal }}>Preview modals should render these fields before sending. This page is the editable source.</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-5">
+        <SectionLabel icon={CalendarDays}>Locations & Calendar</SectionLabel>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 px-5 pb-5">
+          <div className="rounded-2xl p-4" style={{ background: C.bg }}>
+            <p className="text-sm font-medium mb-3" style={{ color: C.ink }}>Saved locations / studios</p>
+            {(state.locations || []).map((location) => (
+              <div key={location.id} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 py-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                <Field compact value={location.name} onChange={(value) => actions.updateLocation(location.id, { name: value })} />
+                <Field compact value={location.address || location.city || ""} onChange={(value) => actions.updateLocation(location.id, { address: value })} />
+                <button onClick={() => actions.removeLocation(location.id)} className="text-xs" style={{ color: C.red }}>Remove</button>
+              </div>
+            ))}
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2">
+              <Field compact value={locationDraft.name} onChange={(value) => setLocationDraft((draft) => ({ ...draft, name: value }))} />
+              <Field compact value={locationDraft.address} onChange={(value) => setLocationDraft((draft) => ({ ...draft, address: value }))} />
+              <button onClick={addLocation} className="px-3 py-2 rounded-xl text-xs font-medium text-white" style={{ background: C.forest }}>Add</button>
+            </div>
+          </div>
+          <div className="rounded-2xl p-4" style={{ background: C.bg }}>
+            <p className="text-sm font-medium mb-3" style={{ color: C.ink }}>Calendar connections</p>
+            {[['google', 'Google Calendar'], ['apple', 'Apple Calendar']].map(([key, label]) => (
+              <button key={key} onClick={() => actions.updateCalendarConnection(key, !state.calendarConnections?.[key])} className="w-full text-left px-4 py-3 rounded-xl mb-2 flex items-center justify-between" style={{ background: "#fff", border: `1px solid ${C.line}`, color: C.ink }}>
+                <span>{state.calendarConnections?.[key] ? 'Connected' : 'Connect'} {label}</span>
+                <Pill tone={state.calendarConnections?.[key] ? "done" : "neutral"}>{state.calendarConnections?.[key] ? "on" : "future"}</Pill>
+              </button>
+            ))}
+            <p className="text-xs mt-3" style={{ color: C.charcoal }}>These are frontend connection switches for now. Backend OAuth comes during Supabase/Auth implementation.</p>
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <Card className="p-5">
+          <SectionLabel icon={LayoutTemplate}>Quote Templates</SectionLabel>
+          <div className="px-5 pb-5 flex flex-wrap gap-2">
+            {(state.quoteTemplates || []).map((name) => <Pill key={name} tone="info">{name}</Pill>)}
+          </div>
+        </Card>
+        <Card className="p-5">
+          <SectionLabel icon={FileSignature}>Contract Templates</SectionLabel>
+          <div className="px-5 pb-5 flex flex-wrap gap-2">
+            {(state.contractTemplates || []).map((name) => <Pill key={name} tone="info">{name}</Pill>)}
+          </div>
+        </Card>
+      </div>
+
+      <Card className="p-5">
+        <SectionLabel icon={CheckCircle2}>Portal Defaults</SectionLabel>
+        <div className="px-5 pb-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+          {(state.portalDefaults || []).map((step) => (
+            <div key={step.id} className="rounded-2xl p-4" style={{ background: C.bg }}>
+              <p className="text-sm font-medium" style={{ color: C.ink }}>{step.title}</p>
+              <p className="text-xs mt-1" style={{ color: C.charcoal }}>{step.body}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+
 function ActivityPage({ state, actions, setPage }) {
+  const [filter, setFilter] = useState("all");
+  const rows = filter === "messages"
+    ? state.messages.map((message) => ({ id: message.id, clientId: message.clientId, text: `${message.from === "client" ? "Client message" : "Studio reply"}: ${message.text}`, createdAt: message.createdAt }))
+    : state.activity.filter((entry) => filter !== "client" || entry.clientId === state.selectedClientId);
   return (
     <Card className="p-5">
-      <SectionLabel icon={Bell}>All Activity</SectionLabel>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <SectionLabel icon={Bell}>Activity</SectionLabel>
+        <div className="flex gap-2">
+          {[
+            ["all", "All Activity"],
+            ["client", "Client Activity"],
+            ["messages", "Messages"],
+          ].map(([key, label]) => (
+            <button key={key} onClick={() => setFilter(key)} className="px-3 py-1.5 rounded-full text-xs font-medium" style={{ background: filter === key ? C.charcoal : C.bg, color: filter === key ? "#fff" : C.charcoal }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="space-y-2">
-        {state.activity.map((entry) => {
+        {rows.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>{filter === "client" ? "Select a client to see client-specific activity." : "No activity yet."}</p>}
+        {rows.map((entry) => {
           const bundle = getClientBundle(state, entry.clientId);
           return (
             <button
@@ -4093,7 +4491,7 @@ function ActivityPage({ state, actions, setPage }) {
               style={{ background: C.bg, cursor: bundle.client ? "pointer" : "default" }}
             >
               <p className="text-sm" style={{ color: bundle.client ? C.forest : C.ink, textDecoration: bundle.client ? "underline" : "none" }}>{entry.text}</p>
-              <p className="text-xs mt-1" style={{ color: C.taupe }}>{entry.createdAt}</p>
+              <p className="text-xs mt-1" style={{ color: C.taupe }}>{bundle.client?.name ? `${bundle.client.name} · ` : ""}{entry.createdAt}</p>
             </button>
           );
         })}
@@ -4172,6 +4570,40 @@ function PriceRow({ label, value, strong = false }) {
       <span style={{ color: C.ink, fontWeight: strong ? 600 : 400 }}>{value}</span>
     </div>
   );
+}
+
+function toInputDate(value = "") {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+}
+
+function fromInputDate(value = "") {
+  if (!value) return "";
+  const parsed = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function toInputTime(value = "") {
+  const match = String(value).match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (!match) return "";
+  let hour = Number(match[1]);
+  const minute = match[2];
+  const ampm = match[3]?.toUpperCase();
+  if (ampm === "PM" && hour < 12) hour += 12;
+  if (ampm === "AM" && hour === 12) hour = 0;
+  return `${String(hour).padStart(2, "0")}:${minute}`;
+}
+
+function fromInputTime(value = "") {
+  if (!value) return "";
+  const [hourRaw, minute] = value.split(":");
+  let hour = Number(hourRaw);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  hour = hour % 12 || 12;
+  return `${hour}:${minute} ${ampm}`;
 }
 
 function nextActionText(bundle) {

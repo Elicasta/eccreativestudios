@@ -275,7 +275,7 @@ const baseAddons = [
   {
     id: "addon_travel",
     name: "Travel Fee",
-    description: "Travel beyond a 20-mile radius of Dallas–Fort Worth",
+    description: "Travel beyond a 20-mile radius of Miami",
     price: 100,
   },
   {
@@ -284,6 +284,43 @@ const baseAddons = [
     description: "Credit toward a printed heirloom album",
     price: 350,
   },
+];
+
+
+const defaultLocations = [
+  { id: "loc_mint_room", name: "Mint Room Studios", city: "Miami, FL", address: "Miami, FL" },
+  { id: "loc_casa_terra", name: "Casa Terra", city: "Miami, FL", address: "Miami, FL" },
+  { id: "loc_vizcaya", name: "Vizcaya", city: "Miami, FL", address: "3251 S Miami Ave, Miami, FL" },
+  { id: "loc_la_maison_leaf", name: "La Maison Leaf", city: "Miami, FL", address: "Miami, FL" },
+  { id: "loc_creative_casa", name: "Creative Casa", city: "Miami, FL", address: "Miami, FL" },
+  { id: "loc_soultuary_dania", name: "Soultuary Dania", city: "Dania Beach, FL", address: "Dania Beach, FL" },
+];
+
+const defaultEmailTemplates = [
+  { key: "portal_access", name: "Send portal access", subject: "Your EC Creative Studios portal is ready, {{client_name}}", body: "Hi {{client_name}},\n\nYour private planning portal is ready: {{portal_link}}\n\nEC Creative Studios" },
+  { key: "date_selection", name: "Send date selection", subject: "Pick your {{session_type}} date", body: "Hi {{client_name}},\n\nYour deposit is in. Please pick your session date and time from your portal.\n\nEC Creative Studios" },
+  { key: "calendar_invite", name: "Send calendar invite", subject: "Calendar invite: {{session_date}} at {{session_time}}", body: "Hi {{client_name}},\n\nHere is your calendar invite for {{session_date}} at {{session_time}} at {{location}}.\n\nEC Creative Studios" },
+  { key: "booking_reminder", name: "Booking reminder", subject: "Finish booking your {{session_type}}", body: "Hi {{client_name}},\n\nYour booking is not complete yet. Please finish the next step in your portal.\n\nEC Creative Studios" },
+  { key: "gallery_delivery", name: "Deliver gallery", subject: "Your gallery is ready", body: "Hi {{client_name}},\n\nYour gallery is ready: {{gallery_link}}\n\nYou can also shop prints here: {{print_store_link}}\n\nEC Creative Studios" },
+  { key: "quote", name: "Send quote", subject: "Your {{session_type}} quote from {{business_name}}", body: "Hi {{client_name}},\n\nYour quote {{quote_number}} is ready. Current quote total: {{quote_total}}.\n\nReview it from your portal and accept when ready.\n\nEC Creative Studios" },
+  { key: "invoice", name: "Send invoice", subject: "Invoice {{invoice_number}} from {{business_name}}", body: "Hi {{client_name}},\n\nInvoice {{invoice_number}} is ready. Balance due: {{invoice_total}}.\n\nEC Creative Studios" },
+  { key: "contract", name: "Send contract", subject: "Please review and sign {{contract_title}}", body: "Hi {{client_name}},\n\nYour contract is ready for review and signature.\n\nEC Creative Studios" },
+  { key: "payment_reminder", name: "Payment reminder", subject: "Payment reminder for {{session_date}}", body: "Hi {{client_name}},\n\nYour final balance is due before or on {{session_date}}.\n\nEC Creative Studios" },
+];
+
+const defaultPortalSteps = [
+  { id: "step_booked", title: "Session Booked", body: "Your quote, contract, and deposit are complete.", status: "complete" },
+  { id: "step_date", title: "Session Date", body: "Choose your date or wait for the studio to set it manually.", status: "pending" },
+  { id: "step_prep", title: "Planning", body: "Review prep notes, inspiration, props, and location details.", status: "pending" },
+  { id: "step_gallery", title: "Gallery Delivery", body: "Your final gallery and print store link will appear here after delivery.", status: "pending" },
+];
+
+const defaultContractTemplates = [
+  "Standard Photography Agreement",
+  "Wedding Agreement",
+  "Branding Agreement",
+  "Event Agreement",
+  "Milestone Package Agreement",
 ];
 
 export function createInitialState() {
@@ -312,7 +349,7 @@ export function createInitialState() {
     inquiryId: inquirySarahId,
     eventType: "Maternity Session",
     sessionDate: "Jul 20, 2026",
-    location: "Dallas, TX",
+    location: "Miami, FL",
     status: "accepted",
     lineItems: [],
     optionGroups: [buildPackageOptionGroup(basePackages, "pkg_maternity_signature", "Maternity Session")],
@@ -333,7 +370,7 @@ export function createInitialState() {
     inquiryId: inquiryAshleyId,
     eventType: "Newborn Session",
     sessionDate: "",
-    location: "Dallas, TX",
+    location: "Miami, FL",
     status: "sent",
     lineItems: [],
     optionGroups: [buildPackageOptionGroup(basePackages, "pkg_newborn_essential", "Newborn Session")],
@@ -352,7 +389,7 @@ export function createInitialState() {
     inquiryId: inquiryThomasId,
     eventType: "Wedding",
     sessionDate: "Oct 14, 2026",
-    location: "Fort Worth, TX",
+    location: "Miami, FL",
     status: "accepted",
     lineItems: buildQuoteItems({ name: baseAddons[1].name, description: baseAddons[1].description, price: baseAddons[1].price }),
     optionGroups: [buildPackageOptionGroup(basePackages, "pkg_wedding_heirloom", "Wedding")],
@@ -383,6 +420,7 @@ export function createInitialState() {
     paidAt: "Jun 18, 2026",
     paymentMethod: "Card",
     internalNotes: "Deposit captured through portal.",
+    locked: true,
   });
 
   return {
@@ -406,11 +444,13 @@ export function createInitialState() {
     studioSettings: { heroImageUrl: "", heroHeadline: "Admin first. Booking rules before everything else." },
     packages: basePackages,
     addons: baseAddons,
-    locations: [
-      { id: "loc_light_haus", name: "The Light Haus Studio", city: "Dallas, TX" },
-      { id: "loc_botanical", name: "Dallas Arboretum", city: "Dallas, TX" },
-      { id: "loc_stockyards", name: "Stockyards Hotel", city: "Fort Worth, TX" },
-    ],
+    locations: defaultLocations,
+    emailTemplates: defaultEmailTemplates,
+    contractTemplates: defaultContractTemplates,
+    quoteTemplates: ["Blank Quote", "Maternity Template", "Newborn Template", "Family Template", "Branding Template", "Wedding Template", "Event Template"],
+    portalDefaults: defaultPortalSteps,
+    calendarConnections: { google: false, apple: false },
+    availabilityLastEditedAt: "Jun 22, 2026 at 4:15 PM",
     inquiries: [
       {
         id: inquirySarahId,
@@ -422,7 +462,7 @@ export function createInitialState() {
         packageId: "pkg_maternity_signature",
         budgetRange: "$900-$1,500",
         desiredDate: "Jul 20, 2026",
-        location: "Dallas, TX",
+        location: "Miami, FL",
         notes: "Looking for soft, timeless images with editorial direction.",
         status: "converted",
         receivedAt: "May 30, 2026",
@@ -452,7 +492,7 @@ export function createInitialState() {
         packageId: "pkg_newborn_essential",
         budgetRange: "$900-$1,500",
         desiredDate: "Jul 29, 2026",
-        location: "Dallas, TX",
+        location: "Miami, FL",
         notes: "Nursery palette is cream and sage.",
         status: "approved",
         receivedAt: "Jun 21, 2026",
@@ -467,7 +507,7 @@ export function createInitialState() {
         packageId: "pkg_wedding_heirloom",
         budgetRange: "$3,500-$5,000",
         desiredDate: "Oct 14, 2026",
-        location: "Fort Worth, TX",
+        location: "Miami, FL",
         notes: "Needs full-day coverage and social teaser.",
         status: "approved",
         receivedAt: "Jun 20, 2026",
@@ -483,7 +523,7 @@ export function createInitialState() {
         sessionType: "Maternity Session",
         packageId: "pkg_maternity_signature",
         status: "active",
-        city: "Dallas, TX",
+        city: "Miami, FL",
         preferredLocationId: "loc_light_haus",
         tags: ["Maternity", "Returning inquiry"],
       },
@@ -496,7 +536,7 @@ export function createInitialState() {
         sessionType: "Newborn Session",
         packageId: "pkg_newborn_essential",
         status: "active",
-        city: "Dallas, TX",
+        city: "Miami, FL",
         preferredLocationId: "loc_light_haus",
         tags: ["Newborn"],
       },
@@ -509,7 +549,7 @@ export function createInitialState() {
         sessionType: "Wedding",
         packageId: "pkg_wedding_heirloom",
         status: "active",
-        city: "Fort Worth, TX",
+        city: "Miami, FL",
         preferredLocationId: "loc_stockyards",
         tags: ["Wedding", "High touch"],
       },
@@ -620,7 +660,7 @@ export function createInitialState() {
         useProjectDetails: false,
         customDate: "",
         customTime: "",
-        customLocation: "The Light Haus Studio",
+        customLocation: "Mint Room Studios",
         sessionVision:
           "Soft, timeless, elegant images that celebrate this chapter with airy movement, editorial framing, and meaningful detail.",
         sessionNotes:
@@ -629,6 +669,8 @@ export function createInitialState() {
         visionImages: [],
         galleryImages: [],
         galleryLink: { url: "", title: "", previewImage: "" },
+        printStoreLink: "",
+        planPrepSteps: defaultPortalSteps.map((step) => ({ ...step })),
       },
       {
         clientId: clientAshleyId,
@@ -642,6 +684,8 @@ export function createInitialState() {
         visionImages: [],
         galleryImages: [],
         galleryLink: { url: "", title: "", previewImage: "" },
+        printStoreLink: "",
+        planPrepSteps: defaultPortalSteps.map((step) => ({ ...step })),
       },
       {
         clientId: clientThomasId,
@@ -655,6 +699,8 @@ export function createInitialState() {
         visionImages: [],
         galleryImages: [],
         galleryLink: { url: "", title: "", previewImage: "" },
+        printStoreLink: "",
+        planPrepSteps: defaultPortalSteps.map((step) => ({ ...step })),
       },
     ],
     messages: [
@@ -910,6 +956,8 @@ export function crmReducer(state, action) {
             visionImages: [],
             galleryImages: [],
             galleryLink: { url: "", title: "", previewImage: "" },
+            printStoreLink: "",
+            planPrepSteps: defaultPortalSteps.map((step) => ({ ...step })),
           },
           ...state.portalProfiles,
         ];
@@ -1003,6 +1051,8 @@ export function crmReducer(state, action) {
             visionImages: [],
             galleryImages: [],
             galleryLink: { url: "", title: "", previewImage: "" },
+            printStoreLink: "",
+            planPrepSteps: defaultPortalSteps.map((step) => ({ ...step })),
           },
           ...state.portalProfiles,
         ];
@@ -1406,7 +1456,7 @@ export function crmReducer(state, action) {
       );
       if (existing) return { ...state, selectedClientId: action.clientId };
 
-      const depositAmount = money(Math.round(quote.total * 0.4));
+      const depositAmount = money(Math.round(quote.total * 0.5));
       const fullAmount = money(quote.total);
       const alreadyBilled = money(bundle.invoices.reduce((total, entry) => total + entry.total, 0));
       const remainingAmount = money(Math.max(0, quote.total - alreadyBilled));
@@ -1436,6 +1486,7 @@ export function crmReducer(state, action) {
         paidAt: "",
         paymentMethod: "",
         internalNotes: "",
+        locked: false,
       });
       return withActivity(
         {
@@ -1456,9 +1507,12 @@ export function crmReducer(state, action) {
     case "patch_invoice": {
       return {
         ...state,
-        invoices: state.invoices.map((entry) =>
-          entry.id === action.invoiceId ? recalcInvoice({ ...entry, ...action.patch }) : entry,
-        ),
+        invoices: state.invoices.map((entry) => {
+          if (entry.id !== action.invoiceId) return entry;
+          if (entry.status === "paid") return entry;
+          if (entry.locked && !action.patch?.locked) return entry;
+          return recalcInvoice({ ...entry, ...action.patch });
+        }),
       };
     }
 
@@ -1469,7 +1523,7 @@ export function crmReducer(state, action) {
         {
           ...state,
           invoices: state.invoices.map((entry) =>
-            entry.id === action.invoiceId ? { ...entry, status: "sent", sentAt: dayStamp() } : entry,
+            entry.id === action.invoiceId ? { ...entry, status: "sent", sentAt: dayStamp(), locked: true } : entry,
           ),
           sessions: state.sessions.map((entry) =>
             entry.id === invoice.sessionId ? { ...entry, status: "payment_pending", prepStatus: "invoice_sent" } : entry,
@@ -1503,7 +1557,7 @@ export function crmReducer(state, action) {
       });
       const status =
         updatedInvoice.balanceDue <= 0 ? "paid" : updatedInvoice.amountPaid > 0 ? "partially_paid" : updatedInvoice.status;
-      const finalInvoice = { ...updatedInvoice, status };
+      const finalInvoice = { ...updatedInvoice, status, locked: status === "paid" ? true : invoice.locked };
       const nextState = {
         ...state,
         invoices: state.invoices.map((entry) => (entry.id === action.invoiceId ? finalInvoice : entry)),
@@ -1671,6 +1725,11 @@ export function crmReducer(state, action) {
                   customTime: action.time,
                   customLocation: action.locationName || entry.customLocation,
                 }
+              : entry,
+          ),
+          invoices: state.invoices.map((entry) =>
+            entry.clientId === action.clientId && entry.kind === "final" && entry.status !== "paid"
+              ? { ...entry, dueDate: action.date, internalNotes: entry.internalNotes || "Final balance due before or on the session date. Reminder should send 7 days before the shoot." }
               : entry,
           ),
         },
@@ -1874,7 +1933,7 @@ export function crmReducer(state, action) {
         bundle = getClientBundle(working, clientId);
         const session = bundle.session;
         if (session && !session.sessionDate) {
-          const slot = { date: "Jul 20, 2026", time: "4:30 PM", locationName: "The Light Haus Studio" };
+          const slot = { date: "Jul 20, 2026", time: "4:30 PM", locationName: "Mint Room Studios" };
           working = {
             ...working,
             sessions: working.sessions.map((entry) =>
@@ -1967,7 +2026,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         invoices: state.invoices.map((entry) =>
-          entry.id === action.invoiceId
+          entry.id === action.invoiceId && entry.status !== "paid" && !entry.locked
             ? recalcInvoice({
                 ...entry,
                 lineItems: [
@@ -1984,7 +2043,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         invoices: state.invoices.map((entry) =>
-          entry.id === action.invoiceId
+          entry.id === action.invoiceId && entry.status !== "paid" && !entry.locked
             ? recalcInvoice({
                 ...entry,
                 lineItems: [...entry.lineItems, { id: nextId("ii"), name: "Custom line item", description: "", quantity: 1, unitPrice: 0 }],
@@ -1998,7 +2057,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         invoices: state.invoices.map((entry) =>
-          entry.id === action.invoiceId
+          entry.id === action.invoiceId && entry.status !== "paid" && !entry.locked
             ? recalcInvoice({
                 ...entry,
                 lineItems: entry.lineItems.map((item) => (item.id === action.itemId ? { ...item, ...action.patch } : item)),
@@ -2012,7 +2071,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         invoices: state.invoices.map((entry) =>
-          entry.id === action.invoiceId
+          entry.id === action.invoiceId && entry.status !== "paid" && !entry.locked
             ? recalcInvoice({ ...entry, lineItems: entry.lineItems.filter((item) => item.id !== action.itemId) })
             : entry,
         ),
@@ -2025,7 +2084,7 @@ export function crmReducer(state, action) {
       const nextAvailability = existing
         ? state.availability.map((entry) => (entry.date === action.date ? { ...entry, times } : entry))
         : [...state.availability, { date: action.date, times }];
-      return { ...state, availability: nextAvailability.filter((entry) => entry.times.length > 0) };
+      return { ...state, availability: nextAvailability.filter((entry) => entry.times.length > 0), availabilityLastEditedAt: stamp() };
     }
 
     case "add_availability_slot": {
@@ -2037,9 +2096,10 @@ export function crmReducer(state, action) {
           availability: state.availability.map((entry) =>
             entry.date === action.date ? { ...entry, times: [...entry.times, action.time].sort() } : entry,
           ),
+          availabilityLastEditedAt: stamp(),
         };
       }
-      return { ...state, availability: [...state.availability, { date: action.date, times: [action.time] }] };
+      return { ...state, availability: [...state.availability, { date: action.date, times: [action.time] }], availabilityLastEditedAt: stamp() };
     }
 
     case "remove_availability_slot": {
@@ -2048,6 +2108,7 @@ export function crmReducer(state, action) {
         availability: state.availability
           .map((entry) => (entry.date === action.date ? { ...entry, times: entry.times.filter((time) => time !== action.time) } : entry))
           .filter((entry) => entry.times.length > 0),
+        availabilityLastEditedAt: stamp(),
       };
     }
 
@@ -2159,6 +2220,8 @@ export function crmReducer(state, action) {
         visionImages: [],
         galleryImages: [],
         galleryLink: { url: "", title: "", previewImage: "" },
+        printStoreLink: "",
+        planPrepSteps: defaultPortalSteps.map((step) => ({ ...step })),
       };
       return withActivity(
         {
@@ -2281,6 +2344,65 @@ export function crmReducer(state, action) {
         getClientBundle(state, payment.clientId).client?.name || "Client",
         `Deleted ${formatCurrency(payment.amount)} payment${invoice ? ` from ${invoice.number}` : ""}.`,
       );
+    }
+
+
+    case "patch_session": {
+      const session = state.sessions.find((entry) => entry.id === action.sessionId);
+      if (!session) return state;
+      const nextSession = { ...session, ...action.patch };
+      const location = state.locations.find((entry) => entry.id === nextSession.locationId);
+      const locationName = action.patch.locationName || location?.name || action.patch.customLocation;
+      return withActivity(
+        {
+          ...state,
+          sessions: state.sessions.map((entry) => (entry.id === action.sessionId ? nextSession : entry)),
+          portalProfiles: state.portalProfiles.map((entry) =>
+            entry.clientId === session.clientId
+              ? {
+                  ...entry,
+                  useProjectDetails: false,
+                  customDate: nextSession.sessionDate || entry.customDate,
+                  customTime: nextSession.sessionTime || entry.customTime,
+                  customLocation: locationName || entry.customLocation,
+                }
+              : entry,
+          ),
+          invoices: state.invoices.map((entry) =>
+            entry.clientId === session.clientId && entry.kind === "final" && entry.status !== "paid"
+              ? { ...entry, dueDate: nextSession.sessionDate || entry.dueDate }
+              : entry,
+          ),
+        },
+        getClientBundle(state, session.clientId).client?.name || "Client",
+        "Session details updated.",
+      );
+    }
+
+    case "update_email_template": {
+      return {
+        ...state,
+        emailTemplates: (state.emailTemplates || defaultEmailTemplates).map((entry) =>
+          entry.key === action.key ? { ...entry, ...action.patch } : entry,
+        ),
+      };
+    }
+
+    case "add_location": {
+      const location = { id: nextId("loc"), name: action.name || "New Location", city: action.city || "Miami, FL", address: action.address || action.city || "Miami, FL" };
+      return { ...state, locations: [...(state.locations || []), location] };
+    }
+
+    case "update_location": {
+      return { ...state, locations: (state.locations || []).map((entry) => (entry.id === action.locationId ? { ...entry, ...action.patch } : entry)) };
+    }
+
+    case "remove_location": {
+      return { ...state, locations: (state.locations || []).filter((entry) => entry.id !== action.locationId) };
+    }
+
+    case "update_calendar_connection": {
+      return { ...state, calendarConnections: { ...(state.calendarConnections || {}), [action.provider]: action.connected } };
     }
 
     default:

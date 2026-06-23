@@ -287,6 +287,7 @@ function inlineFormat(value) {
   return value.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/(?<!\*)\*(.+?)\*(?!\*)/g, "<em>$1</em>");
 }
 function renderRichText(text) {
+  if (/<(p|ul|ol|li|strong|em|br)\b/i.test(text || "")) return text;
   const lines = escapeHtml(text).split("\n");
   let html = "";
   let listType = null;
@@ -589,7 +590,13 @@ function VisionPage({ selectedBundle }) {
 
 function PlanPage({ selectedBundle }) {
   const session = selectedBundle.session;
-  const steps = [
+  const customSteps = selectedBundle.portal?.planPrepSteps || [];
+  const steps = customSteps.length ? customSteps.map((step) => ({
+    label: step.title,
+    done: step.status === "complete",
+    active: step.status === "active",
+    date: step.body,
+  })) : [
     { label: "Session Booked", done: selectedBundle.booking.isBooked, date: session?.projectCreatedAt || "" },
     { label: "Planning & Inspiration", done: Boolean(selectedBundle.portal?.sessionVision), date: "In progress" },
     { label: "Session Day", done: session?.status === "completed", date: session?.sessionDate || "Awaiting selection" },
@@ -609,11 +616,11 @@ function PlanPage({ selectedBundle }) {
         <p className="text-[10px] uppercase tracking-[0.3em] mb-3" style={{ color: C.taupe }}>What's Next</p>
         <div className="space-y-3">
           {steps.map((step) => (
-            <div key={step.label} className="flex items-center gap-3">
-              {step.done ? <CheckCircle2 size={16} color={C.forest} /> : <Circle size={16} color={C.taupe} />}
+            <div key={step.label} className="flex items-start gap-3">
+              {step.done ? <CheckCircle2 size={16} color={C.forest} className="mt-0.5" /> : <Circle size={16} color={step.active ? C.forest : C.taupe} className="mt-0.5" />}
               <div>
                 <p className="text-sm" style={{ color: C.ink }}>{step.label}</p>
-                <p className="text-xs" style={{ color: C.taupe }}>{step.date}</p>
+                <p className="text-xs leading-5" style={{ color: C.taupe }}>{step.date}</p>
               </div>
             </div>
           ))}
@@ -622,6 +629,7 @@ function PlanPage({ selectedBundle }) {
     </div>
   );
 }
+
 
 function GalleryPage({ selectedBundle }) {
   const session = selectedBundle.session;
@@ -660,6 +668,11 @@ function GalleryPage({ selectedBundle }) {
       <a href={galleryLink.url} target="_blank" rel="noreferrer" className="w-full block text-center py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>
         Open Gallery
       </a>
+      {selectedBundle.portal?.printStoreLink && (
+        <a href={selectedBundle.portal.printStoreLink} target="_blank" rel="noreferrer" className="w-full block text-center py-2.5 rounded-xl text-sm font-medium" style={{ background: C.cream, color: C.ink }}>
+          Print Your Album / Shop Your Gallery
+        </a>
+      )}
     </div>
   );
 }

@@ -9,15 +9,34 @@ import ManualOverride from "./components/ManualOverride";
 import AdminApp from "./admin/AdminApp";
 import ClientApp from "./client/ClientApp";
 
-const STORAGE_KEY = "eccs-crm-v6";
+const STORAGE_KEY = "eccs-crm-v7";
 
 function initState() {
-  if (typeof window === "undefined") return createInitialState();
+  const fresh = createInitialState();
+  if (typeof window === "undefined") return fresh;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : createInitialState();
+    if (!raw) return fresh;
+    const stored = JSON.parse(raw);
+    return {
+      ...fresh,
+      ...stored,
+      availability: stored.availability || fresh.availability,
+      locations: stored.locations?.length ? stored.locations : fresh.locations,
+      emailTemplates: stored.emailTemplates?.length ? stored.emailTemplates : fresh.emailTemplates,
+      contractTemplates: stored.contractTemplates?.length ? stored.contractTemplates : fresh.contractTemplates,
+      quoteTemplates: stored.quoteTemplates?.length ? stored.quoteTemplates : fresh.quoteTemplates,
+      portalDefaults: stored.portalDefaults?.length ? stored.portalDefaults : fresh.portalDefaults,
+      calendarConnections: stored.calendarConnections || fresh.calendarConnections,
+      availabilityLastEditedAt: stored.availabilityLastEditedAt || fresh.availabilityLastEditedAt,
+      portalProfiles: (stored.portalProfiles || fresh.portalProfiles).map((profile) => ({
+        ...profile,
+        printStoreLink: profile.printStoreLink || "",
+        planPrepSteps: profile.planPrepSteps?.length ? profile.planPrepSteps : fresh.portalDefaults,
+      })),
+    };
   } catch {
-    return createInitialState();
+    return fresh;
   }
 }
 
@@ -100,6 +119,12 @@ export default function ECCSPrototype() {
       addSocialRule: (payload) => dispatch({ type: "add_social_rule", ...payload }),
       refundPayment: (paymentId, amount, note) => dispatch({ type: "refund_payment", paymentId, amount, note }),
       deletePayment: (paymentId) => dispatch({ type: "delete_payment", paymentId }),
+      patchSession: (sessionId, patch) => dispatch({ type: "patch_session", sessionId, patch }),
+      updateEmailTemplate: (key, patch) => dispatch({ type: "update_email_template", key, patch }),
+      addLocation: (payload) => dispatch({ type: "add_location", ...payload }),
+      updateLocation: (locationId, patch) => dispatch({ type: "update_location", locationId, patch }),
+      removeLocation: (locationId) => dispatch({ type: "remove_location", locationId }),
+      updateCalendarConnection: (provider, connected) => dispatch({ type: "update_calendar_connection", provider, connected }),
       resetDemo: () => window.localStorage.removeItem(STORAGE_KEY),
     }),
     [],
