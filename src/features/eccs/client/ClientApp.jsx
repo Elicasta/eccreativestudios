@@ -24,6 +24,7 @@ import {
 import { C } from "../lib/brand";
 import { formatCurrency, PIPELINE_LABELS } from "../lib/crm";
 import { Card, Pill, StatusLight } from "../components/ui";
+import { LinkPreviewCard } from "../components/LinkPreviewCard";
 
 const NAV = [
   { key: "overview", label: "Overview", icon: Home },
@@ -648,30 +649,14 @@ function GalleryPage({ selectedBundle }) {
     );
   }
 
-  let domain = "";
-  try { domain = new URL(galleryLink.url).hostname.replace("www.", ""); } catch { domain = galleryLink.url; }
-
   return (
     <div className="space-y-4">
       <p className="ecc-display text-3xl" style={{ color: C.ink }}>Your Gallery</p>
-      <a href={galleryLink.url} target="_blank" rel="noreferrer" className="block rounded-2xl overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
-        <div className="aspect-[16/9] flex items-center justify-center" style={{ background: galleryLink.previewImage ? "transparent" : C.bg }}>
-          {galleryLink.previewImage ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={galleryLink.previewImage} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center text-center px-6" style={{ background: `linear-gradient(135deg, ${C.cream}, ${C.bg})` }}>
-              <ImageIcon size={32} color={C.taupe} />
-              <p className="ecc-display text-2xl mt-3" style={{ color: C.ink }}>{galleryLink.title || "Pixieset Gallery"}</p>
-              <p className="text-xs mt-1" style={{ color: C.taupe }}>Preview image not added yet. Link still opens normally.</p>
-            </div>
-          )}
-        </div>
-        <div className="p-4" style={{ background: "#fff" }}>
-          <p className="text-sm font-medium" style={{ color: C.ink }}>{galleryLink.title || "Your Gallery"}</p>
-          <p className="text-xs mt-0.5" style={{ color: C.taupe }}>{domain}</p>
-        </div>
-      </a>
+      <LinkPreviewCard
+        link={galleryLink}
+        fallbackTitle="Your Gallery"
+        helperText="Preview image is pulled from the gallery link when Pixieset exposes one."
+      />
       <a href={galleryLink.url} target="_blank" rel="noreferrer" className="w-full block text-center py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>
         Open Gallery
       </a>

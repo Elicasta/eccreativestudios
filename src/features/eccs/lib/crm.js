@@ -79,8 +79,24 @@ const buildQuoteItems = (pkg, addons = []) => [
   })),
 ];
 
-const buildPackageOptionGroup = (packages = [], selectedPackageId) => {
-  const options = packages.map((pkg) => ({
+const normalizeSessionKey = (value = "") =>
+  String(value).toLowerCase().replace(/[^a-z0-9]+/g, "").replace(/session$/, "");
+
+const getPackageCandidates = (packages = [], sessionType = "") => {
+  const sessionKey = normalizeSessionKey(sessionType);
+  const exact = packages.filter((pkg) => normalizeSessionKey(pkg.sessionType || pkg.category || pkg.name).includes(sessionKey) || sessionKey.includes(normalizeSessionKey(pkg.sessionType || pkg.category || pkg.name)));
+  return exact.length ? exact : packages;
+};
+
+const resolvePackage = (packages = [], packageId, sessionType = "") => {
+  const byId = packages.find((entry) => entry.id === packageId);
+  if (byId) return byId;
+  return getPackageCandidates(packages, sessionType)[0] || packages[0] || null;
+};
+
+const buildPackageOptionGroup = (packages = [], selectedPackageId, sessionType = "") => {
+  const candidates = getPackageCandidates(packages, sessionType);
+  const options = candidates.map((pkg) => ({
     id: nextId("qopt"),
     packageId: pkg.id,
     name: pkg.name,
@@ -91,13 +107,23 @@ const buildPackageOptionGroup = (packages = [], selectedPackageId) => {
   const selected = options.find((option) => option.packageId === selectedPackageId) || options[0];
   return {
     id: nextId("qgrp"),
-    title: "Choose your photography experience",
-    description: "Client must choose one package before accepting the quote.",
+    title: sessionType ? `Choose your ${sessionType.toLowerCase()} package` : "Choose your photography experience",
+    description: "This is pulled from the inquiry package choice. The client can still choose another option before accepting.",
     selectionMode: "single",
     required: true,
     selectedOptionIds: selected ? [selected.id] : [],
     options,
   };
+};
+
+const buildQuoteNotesFromInquiry = (inquiry, pkg) => {
+  const parts = [
+    inquiry?.notes ? `Inquiry notes: ${inquiry.notes}` : "",
+    inquiry?.budgetRange ? `Budget range: ${inquiry.budgetRange}` : "",
+    inquiry?.desiredDate ? `Preferred date: ${inquiry.desiredDate}` : "",
+    pkg?.name ? `Default package: ${pkg.name}` : "",
+  ].filter(Boolean);
+  return parts.join("\n");
 };
 
 const buildInvoiceItems = (label, amount) => [
@@ -164,16 +190,54 @@ export const BOOKING_STEPS = [
 
 const basePackages = [
   {
-    id: "pkg_signature",
-    name: "The Signature Experience",
-    description: "Full maternity portrait session with styling guidance, creative direction, and premium gallery delivery.",
+    id: "pkg_maternity_essential",
+    name: "Maternity Essential",
+    sessionType: "Maternity Session",
+    category: "maternity",
+    quoteTemplateName: "Maternity Portrait Quote",
+    emailTemplateKey: "maternity_quote",
+    description: "A calm, guided maternity session with creative direction, wardrobe support, and a refined edited gallery.",
+    price: 950,
+  },
+  {
+    id: "pkg_maternity_signature",
+    name: "Maternity Signature",
+    sessionType: "Maternity Session",
+    category: "maternity",
+    quoteTemplateName: "Maternity Portrait Quote",
+    emailTemplateKey: "maternity_quote",
+    description: "The full maternity experience with deeper styling, partner/family coverage, and a larger finished gallery.",
     price: 1850,
   },
   {
-    id: "pkg_heirloom",
-    name: "The Heirloom Session",
-    description: "Family storytelling session with extended gallery coverage and heirloom album credit.",
-    price: 2400,
+    id: "pkg_newborn_essential",
+    name: "Newborn Essential",
+    sessionType: "Newborn Session",
+    category: "newborn",
+    quoteTemplateName: "Newborn Session Quote",
+    emailTemplateKey: "newborn_quote",
+    description: "A gentle newborn session built around baby-led posing, soft family moments, and a clean timeless gallery.",
+    price: 1250,
+  },
+  {
+    id: "pkg_family_story",
+    name: "Family Story",
+    sessionType: "Family Session",
+    category: "family",
+    quoteTemplateName: "Family Story Quote",
+    emailTemplateKey: "family_quote",
+    description: "Outdoor or in-home family storytelling with guided prompts, natural movement, and polished gallery delivery.",
+    price: 1200,
+  },
+  {
+    id: "pkg_wedding_heirloom",
+    name: "Wedding Heirloom",
+    sessionType: "Wedding",
+    category: "wedding",
+    quoteTemplateName: "Wedding Coverage Quote",
+    emailTemplateKey: "wedding_quote",
+    description: "Wedding coverage with planning support, documentary coverage, portraits, details, and heirloom delivery structure.",
+    price: 2700,
   },
 ];
 
@@ -250,7 +314,8 @@ export function createInitialState() {
     sessionDate: "Jul 20, 2026",
     location: "Dallas, TX",
     status: "accepted",
-    lineItems: buildQuoteItems(basePackages[0], [baseAddons[0]]),
+    lineItems: [],
+    optionGroups: [buildPackageOptionGroup(basePackages, "pkg_maternity_signature", "Maternity Session")],
     discount: 250,
     tax: 0,
     notes: "Includes creative planning call, wardrobe guidance, and gallery delivery.",
@@ -270,7 +335,8 @@ export function createInitialState() {
     sessionDate: "",
     location: "Dallas, TX",
     status: "sent",
-    lineItems: buildQuoteItems(basePackages[0]),
+    lineItems: [],
+    optionGroups: [buildPackageOptionGroup(basePackages, "pkg_newborn_essential", "Newborn Session")],
     discount: 0,
     tax: 0,
     notes: "Held for 7 days pending approval.",
@@ -288,7 +354,8 @@ export function createInitialState() {
     sessionDate: "Oct 14, 2026",
     location: "Fort Worth, TX",
     status: "accepted",
-    lineItems: buildQuoteItems(basePackages[1], [baseAddons[1]]),
+    lineItems: buildQuoteItems({ name: baseAddons[1].name, description: baseAddons[1].description, price: baseAddons[1].price }),
+    optionGroups: [buildPackageOptionGroup(basePackages, "pkg_wedding_heirloom", "Wedding")],
     discount: 0,
     tax: 0,
     notes: "Coverage includes engagement planning and highlight reel.",
@@ -352,6 +419,7 @@ export function createInitialState() {
         email: "sarahgarcia@email.com",
         phone: "(214) 555-3872",
         sessionType: "Maternity Session",
+        packageId: "pkg_maternity_signature",
         budgetRange: "$900-$1,500",
         desiredDate: "Jul 20, 2026",
         location: "Dallas, TX",
@@ -366,6 +434,7 @@ export function createInitialState() {
         email: "daniel@example.com",
         phone: "(214) 555-4411",
         sessionType: "Family Session",
+        packageId: "pkg_family_story",
         budgetRange: "$800-$1,200",
         desiredDate: "Aug 9, 2026",
         location: "Plano, TX",
@@ -380,6 +449,7 @@ export function createInitialState() {
         email: "ashley.morgan@example.com",
         phone: "(469) 555-9001",
         sessionType: "Newborn Session",
+        packageId: "pkg_newborn_essential",
         budgetRange: "$900-$1,500",
         desiredDate: "Jul 29, 2026",
         location: "Dallas, TX",
@@ -394,6 +464,7 @@ export function createInitialState() {
         email: "thomasrachel@example.com",
         phone: "(817) 555-3002",
         sessionType: "Wedding",
+        packageId: "pkg_wedding_heirloom",
         budgetRange: "$3,500-$5,000",
         desiredDate: "Oct 14, 2026",
         location: "Fort Worth, TX",
@@ -410,7 +481,7 @@ export function createInitialState() {
         email: "sarahgarcia@email.com",
         phone: "(214) 555-3872",
         sessionType: "Maternity Session",
-        packageId: "pkg_signature",
+        packageId: "pkg_maternity_signature",
         status: "active",
         city: "Dallas, TX",
         preferredLocationId: "loc_light_haus",
@@ -423,7 +494,7 @@ export function createInitialState() {
         email: "ashley.morgan@example.com",
         phone: "(469) 555-9001",
         sessionType: "Newborn Session",
-        packageId: "pkg_signature",
+        packageId: "pkg_newborn_essential",
         status: "active",
         city: "Dallas, TX",
         preferredLocationId: "loc_light_haus",
@@ -436,7 +507,7 @@ export function createInitialState() {
         email: "thomasrachel@example.com",
         phone: "(817) 555-3002",
         sessionType: "Wedding",
-        packageId: "pkg_heirloom",
+        packageId: "pkg_wedding_heirloom",
         status: "active",
         city: "Fort Worth, TX",
         preferredLocationId: "loc_stockyards",
@@ -787,7 +858,7 @@ export function crmReducer(state, action) {
 
       if (!clientId) {
         clientId = nextId("client");
-        const packageId = state.packages[0]?.id || null;
+        const packageId = resolvePackage(state.packages, inquiry.packageId, inquiry.sessionType)?.id || state.packages[0]?.id || null;
         clients = [
           {
             id: clientId,
@@ -860,6 +931,129 @@ export function crmReducer(state, action) {
       );
     }
 
+    case "patch_inquiry": {
+      return {
+        ...state,
+        inquiries: state.inquiries.map((entry) =>
+          entry.id === action.inquiryId ? { ...entry, ...action.patch } : entry,
+        ),
+      };
+    }
+
+    case "start_quote_from_inquiry": {
+      const inquiry = state.inquiries.find((entry) => entry.id === action.inquiryId);
+      if (!inquiry) return state;
+
+      let clientId = inquiry.clientId;
+      let clients = state.clients;
+      let sessions = state.sessions;
+      let portalProfiles = state.portalProfiles;
+      const pkg = resolvePackage(state.packages, inquiry.packageId, inquiry.sessionType);
+
+      if (!clientId) {
+        clientId = nextId("client");
+        clients = [
+          {
+            id: clientId,
+            inquiryId: inquiry.id,
+            name: inquiry.name,
+            email: inquiry.email,
+            phone: inquiry.phone,
+            sessionType: inquiry.sessionType,
+            packageId: pkg?.id || state.packages[0]?.id || null,
+            status: "active",
+            city: inquiry.location,
+            preferredLocationId: state.locations[0]?.id || null,
+            tags: ["Lead converted"],
+          },
+          ...state.clients,
+        ];
+        sessions = [
+          {
+            id: nextId("session"),
+            clientId,
+            quoteId: null,
+            contractId: null,
+            invoiceIds: [],
+            sessionType: inquiry.sessionType,
+            status: "planning",
+            sessionDate: "",
+            sessionTime: "",
+            locationId: state.locations[0]?.id || null,
+            prepStatus: "quote_in_progress",
+            galleryStatus: "not_ready",
+            projectCreatedAt: "",
+            portalAccessSentAt: "",
+            availabilityEmailSentAt: "",
+            calendarInviteSentAt: "",
+            notes: "Quote started from the client inquiry.",
+          },
+          ...state.sessions,
+        ];
+        portalProfiles = [
+          {
+            clientId,
+            useProjectDetails: true,
+            customDate: "",
+            customTime: "",
+            customLocation: "",
+            sessionVision: inquiry.notes || "",
+            sessionNotes: "",
+            propList: [],
+            visionImages: [],
+            galleryImages: [],
+            galleryLink: { url: "", title: "", previewImage: "" },
+          },
+          ...state.portalProfiles,
+        ];
+      } else {
+        clients = state.clients.map((entry) =>
+          entry.id === clientId
+            ? { ...entry, packageId: pkg?.id || entry.packageId, sessionType: inquiry.sessionType || entry.sessionType, city: inquiry.location || entry.city }
+            : entry,
+        );
+      }
+
+      const bundleAfterClient = getClientBundle({ ...state, clients, sessions, portalProfiles }, clientId);
+      const existing = bundleAfterClient.quotes.find((entry) => activeQuoteStatuses.includes(entry.status));
+      const quote = existing || recalcQuote({
+        id: nextId("quote"),
+        number: `QUO-${1000 + state.quotes.length + 1}`,
+        clientId,
+        inquiryId: inquiry.id,
+        eventType: inquiry.sessionType,
+        sessionDate: inquiry.desiredDate || "",
+        location: inquiry.location || "",
+        status: "draft",
+        lineItems: [],
+        optionGroups: [buildPackageOptionGroup(state.packages, pkg?.id, inquiry.sessionType)],
+        discount: 0,
+        tax: 0,
+        notes: buildQuoteNotesFromInquiry(inquiry, pkg) || "Drafted from the inquiry form.",
+        expirationDate: "",
+        createdAt: dayStamp(),
+        sentAt: "",
+        viewedAt: "",
+        acceptedAt: "",
+      });
+
+      return withActivity(
+        {
+          ...state,
+          selectedClientId: clientId,
+          clients,
+          sessions: sessions.map((entry) => entry.clientId === clientId ? { ...entry, quoteId: quote.id } : entry),
+          portalProfiles,
+          inquiries: state.inquiries.map((entry) =>
+            entry.id === inquiry.id ? { ...entry, clientId, status: entry.status === "new" ? "approved" : entry.status, packageId: pkg?.id || entry.packageId } : entry,
+          ),
+          quotes: existing ? state.quotes : [quote, ...state.quotes],
+        },
+        inquiry.name,
+        existing ? `Opened existing quote ${existing.number} from inquiry.` : `Quote ${quote.number} drafted from the inquiry form.`,
+      );
+    }
+
     case "create_quote": {
       const bundle = getClientBundle(state, action.clientId);
       if (!bundle.client) return state;
@@ -867,7 +1061,7 @@ export function crmReducer(state, action) {
       if (existing && !action.force) {
         return { ...state, selectedClientId: action.clientId };
       }
-      const pkg = state.packages.find((entry) => entry.id === bundle.client.packageId) || state.packages[0];
+      const pkg = resolvePackage(state.packages, bundle.inquiry?.packageId || bundle.client.packageId, bundle.client.sessionType);
       const quote = recalcQuote({
         id: nextId("quote"),
         number: `QUO-${1000 + state.quotes.length + 1}`,
@@ -878,10 +1072,10 @@ export function crmReducer(state, action) {
         location: bundle.client.city || "",
         status: "draft",
         lineItems: [],
-        optionGroups: [buildPackageOptionGroup(state.packages, bundle.client.packageId)],
+        optionGroups: [buildPackageOptionGroup(state.packages, pkg?.id || bundle.client.packageId, bundle.client.sessionType)],
         discount: 0,
         tax: 0,
-        notes: "Drafted inside EC Creative Studios CRM.",
+        notes: buildQuoteNotesFromInquiry(bundle.inquiry, pkg) || "Drafted inside EC Creative Studios CRM.",
         expirationDate: "",
         createdAt: dayStamp(),
         sentAt: "",
@@ -1540,7 +1734,7 @@ export function crmReducer(state, action) {
       let bundle = getClientBundle(working, clientId);
       if (!bundle.client) return state;
       const clientName = bundle.client.name;
-      const pkg = working.packages.find((entry) => entry.id === bundle.client.packageId) || working.packages[0];
+      const pkg = resolvePackage(working.packages, bundle.inquiry?.packageId || bundle.client.packageId, bundle.client.sessionType);
 
       if (targetRank >= FORCE_STAGE_ORDER.indexOf("quote_drafted")) {
         bundle = getClientBundle(working, clientId);
@@ -1556,10 +1750,10 @@ export function crmReducer(state, action) {
             location: bundle.client.city || "",
             status: "draft",
             lineItems: [],
-            optionGroups: [buildPackageOptionGroup(working.packages, bundle.client.packageId)],
+            optionGroups: [buildPackageOptionGroup(working.packages, pkg?.id || bundle.client.packageId, bundle.client.sessionType)],
             discount: 0,
             tax: 0,
-            notes: "Drafted via Manual Override.",
+            notes: buildQuoteNotesFromInquiry(bundle.inquiry, pkg) || "Drafted via Manual Override.",
             expirationDate: "",
             createdAt: dayStamp(),
             sentAt: "",
@@ -1905,6 +2099,7 @@ export function crmReducer(state, action) {
       const inquiryId = nextId("inq");
       const name = action.name?.trim() || "New Client";
       const sessionType = action.sessionType?.trim() || "Portrait Session";
+      const pkg = resolvePackage(state.packages, action.packageId, sessionType);
       const inquiry = {
         id: inquiryId,
         clientId,
@@ -1912,6 +2107,7 @@ export function crmReducer(state, action) {
         email: action.email || "",
         phone: action.phone || "",
         sessionType,
+        packageId: pkg?.id || action.packageId || null,
         budgetRange: action.budgetRange || "",
         desiredDate: action.desiredDate || "",
         location: action.location || "Miami, FL",
@@ -1926,7 +2122,7 @@ export function crmReducer(state, action) {
         email: action.email || "",
         phone: action.phone || "",
         sessionType,
-        packageId: state.packages[0]?.id || null,
+        packageId: pkg?.id || state.packages[0]?.id || null,
         status: "active",
         city: action.location || "Miami, FL",
         preferredLocationId: state.locations[0]?.id || null,
@@ -1979,13 +2175,16 @@ export function crmReducer(state, action) {
     }
 
     case "create_inquiry": {
+      const sessionType = action.sessionType || "Portrait Session";
+      const pkg = resolvePackage(state.packages, action.packageId, sessionType);
       const inquiry = {
         id: nextId("inq"),
         clientId: null,
         name: action.name?.trim() || "New Inquiry",
         email: action.email || "",
         phone: action.phone || "",
-        sessionType: action.sessionType || "Portrait Session",
+        sessionType,
+        packageId: pkg?.id || action.packageId || null,
         budgetRange: action.budgetRange || "",
         desiredDate: action.desiredDate || "",
         location: action.location || "Miami, FL",

@@ -9,7 +9,7 @@ import ManualOverride from "./components/ManualOverride";
 import AdminApp from "./admin/AdminApp";
 import ClientApp from "./client/ClientApp";
 
-const STORAGE_KEY = "eccs-crm-v2";
+const STORAGE_KEY = "eccs-crm-v6";
 
 function initState() {
   if (typeof window === "undefined") return createInitialState();
@@ -39,6 +39,8 @@ export default function ECCSPrototype() {
     () => ({
       selectClient: (clientId) => dispatch({ type: "select_client", clientId }),
       approveInquiry: (inquiryId) => dispatch({ type: "approve_inquiry", inquiryId }),
+      patchInquiry: (inquiryId, patch) => dispatch({ type: "patch_inquiry", inquiryId, patch }),
+      startQuoteFromInquiry: (inquiryId) => dispatch({ type: "start_quote_from_inquiry", inquiryId }),
       createQuote: (clientId, options = {}) => dispatch({ type: "create_quote", clientId, ...options }),
       addQuoteCatalogItem: (quoteId, item) => dispatch({ type: "add_quote_catalog_item", quoteId, ...item }),
       patchQuote: (quoteId, patch) => dispatch({ type: "patch_quote", quoteId, patch }),

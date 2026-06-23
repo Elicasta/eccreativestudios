@@ -47,6 +47,7 @@ import {
   PIPELINE_STAGES,
 } from "../lib/crm";
 import { Avatar, Card, EmptyState, Pill, SectionLabel, StatusLight } from "../components/ui";
+import { LinkPreviewCard } from "../components/LinkPreviewCard";
 
 const NAV = [
   { group: null, items: [
@@ -379,6 +380,7 @@ function QuickCreateModal({ page, state, selectedBundle, actions, setPage, onClo
     email: "",
     phone: "",
     sessionType: "Maternity Session",
+    packageId: "",
     location: "Miami, FL",
     desiredDate: "",
     notes: "",
@@ -510,6 +512,15 @@ function QuickCreateModal({ page, state, selectedBundle, actions, setPage, onClo
           {mode !== "addon" && <Field label="Email" value={draft.email} onChange={(value) => update({ email: value })} />}
           {mode !== "addon" && <Field label="Phone" value={draft.phone} onChange={(value) => update({ phone: value })} />}
           {mode !== "addon" && <Field label="Session type" value={draft.sessionType} onChange={(value) => update({ sessionType: value })} />}
+          {mode !== "addon" && (
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Requested package</p>
+              <select value={draft.packageId} onChange={(event) => update({ packageId: event.target.value })} className="w-full rounded-2xl px-3 py-2.5 text-sm outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink, background: "#fff" }}>
+                <option value="">Auto-match from session type</option>
+                {state.packages.map((pkg) => <option key={pkg.id} value={pkg.id}>{pkg.name} — {formatCurrency(pkg.price || 0)}</option>)}
+              </select>
+            </div>
+          )}
           {mode !== "addon" && <Field label="Location" value={draft.location} onChange={(value) => update({ location: value })} />}
           {mode === "addon" && <Field label="Price" type="number" value={draft.price} onChange={(value) => update({ price: value })} />}
         </div>
@@ -892,8 +903,10 @@ function InquiriesPage({ state, actions, setPage }) {
   const [typeFilter, setTypeFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("newest");
+  const [openInquiryId, setOpenInquiryId] = useState(null);
 
   const sessionTypes = useMemo(() => Array.from(new Set(state.inquiries.map((entry) => entry.sessionType))), [state.inquiries]);
+  const openInquiry = state.inquiries.find((entry) => entry.id === openInquiryId);
 
   const stats = [
     { key: "all", label: "All", count: state.inquiries.length },
@@ -906,8 +919,19 @@ function InquiriesPage({ state, actions, setPage }) {
   const filtered = state.inquiries
     .filter((entry) => statusFilter === "all" || entry.status === statusFilter)
     .filter((entry) => typeFilter === "all" || entry.sessionType === typeFilter)
-    .filter((entry) => !query.trim() || entry.name.toLowerCase().includes(query.trim().toLowerCase()))
+    .filter((entry) => {
+      const needle = query.trim().toLowerCase();
+      if (!needle) return true;
+      return [entry.name, entry.email, entry.phone, entry.sessionType, entry.budgetRange, entry.location, entry.notes]
+        .some((value) => String(value || "").toLowerCase().includes(needle));
+    })
     .sort((a, b) => (sort === "newest" ? String(b.receivedAt).localeCompare(String(a.receivedAt)) : String(a.receivedAt).localeCompare(String(b.receivedAt))));
+
+  const startQuote = (inquiryId) => {
+    actions.startQuoteFromInquiry(inquiryId);
+    setOpenInquiryId(null);
+    setPage("quotes");
+  };
 
   return (
     <div className="space-y-4">
@@ -923,9 +947,10 @@ function InquiriesPage({ state, actions, setPage }) {
       </div>
 
       <Card className="p-4 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-full flex-1 min-w-[160px]" style={{ background: C.bg }}>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-full flex-1 min-w-[180px]" style={{ background: C.bg }}>
           <Search size={14} color={C.taupe} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name..." className="bg-transparent outline-none text-sm w-full" style={{ color: C.ink }} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, email, package, notes..." className="bg-transparent outline-none text-sm w-full" style={{ color: C.ink }} />
+          {query && <button onClick={() => setQuery("")}><X size={13} color={C.taupe} /></button>}
         </div>
         <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="px-3 py-2 rounded-full text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
           <option value="all">All session types</option>
@@ -938,54 +963,137 @@ function InquiriesPage({ state, actions, setPage }) {
       </Card>
 
       <Card className="p-5">
-        <SectionLabel icon={Inbox}>Incoming Leads</SectionLabel>
+        <div className="flex items-center justify-between px-5 pb-2">
+          <SectionLabel icon={Inbox}>Incoming Leads</SectionLabel>
+          <p className="text-xs" style={{ color: C.taupe }}>Tap a lead to open the actual inquiry form.</p>
+        </div>
         <div className="space-y-3 px-5 pb-5 pt-2">
           {filtered.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>No inquiries match these filters.</p>}
           {filtered.map((inquiry) => {
+            const pkg = state.packages.find((entry) => entry.id === inquiry.packageId);
             const hasClient = Boolean(inquiry.clientId);
-            const Wrapper = hasClient ? "button" : "div";
             return (
-              <Wrapper
+              <button
                 key={inquiry.id}
-                onClick={hasClient ? () => { actions.selectClient(inquiry.clientId); setPage("clients"); } : undefined}
+                onClick={() => setOpenInquiryId(inquiry.id)}
                 className="w-full text-left rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3"
                 style={{ background: inquiry.status === "new" ? "#fff8ef" : "#fff", border: `1px solid ${C.line}` }}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   <Avatar name={inquiry.name} />
-                  <div>
-                    <p className="text-sm font-medium" style={{ color: hasClient ? C.forest : C.ink, textDecoration: hasClient ? "underline" : "none" }}>{inquiry.name}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: C.ink }}>{inquiry.name}</p>
                     <p className="text-xs mt-1" style={{ color: C.charcoal }}>
-                      {inquiry.sessionType} • {inquiry.budgetRange} • {inquiry.receivedAt}
+                      {inquiry.sessionType} • {pkg?.name || "No package picked"} • {inquiry.budgetRange || "No budget"} • {inquiry.receivedAt}
                     </p>
-                    <p className="text-xs mt-2 max-w-md" style={{ color: C.charcoal }}>{inquiry.notes}</p>
+                    <p className="text-xs mt-2 max-w-md line-clamp-2" style={{ color: C.charcoal }}>{inquiry.notes}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Pill tone={inquiry.status === "new" ? "warn" : inquiry.status === "lost" ? "warn" : "info"}>{inquiry.status}</Pill>
-                  {inquiry.status === "new" && (
-                    <span
-                      onClick={(event) => { event.stopPropagation(); actions.approveInquiry(inquiry.id); }}
-                      className="px-3 py-2 rounded-full text-xs font-medium text-white"
-                      style={{ background: C.forest }}
-                    >
-                      Approve
-                    </span>
-                  )}
+                  {hasClient && <Pill tone="done">client record</Pill>}
+                  <ChevronRight size={14} color={C.taupe} />
                 </div>
-              </Wrapper>
+              </button>
             );
           })}
         </div>
       </Card>
+
+      {openInquiry && (
+        <InquiryDetailModal
+          inquiry={openInquiry}
+          packages={state.packages}
+          actions={actions}
+          onClose={() => setOpenInquiryId(null)}
+          onOpenClient={(clientId) => { actions.selectClient(clientId); setOpenInquiryId(null); setPage("clients"); }}
+          onStartQuote={() => startQuote(openInquiry.id)}
+        />
+      )}
+    </div>
+  );
+}
+
+function InquiryDetailModal({ inquiry, packages, actions, onClose, onOpenClient, onStartQuote }) {
+  const selectedPackage = packages.find((entry) => entry.id === inquiry.packageId);
+  const matchingPackages = packages.filter((pkg) => {
+    const session = String(inquiry.sessionType || "").toLowerCase();
+    return !pkg.sessionType || session.includes(String(pkg.sessionType).toLowerCase().replace(" session", "")) || String(pkg.sessionType).toLowerCase().includes(session.replace(" session", ""));
+  });
+  const packageOptions = matchingPackages.length ? matchingPackages : packages;
+
+  return (
+    <Modal onClose={onClose} title="Inquiry form">
+      <div className="flex items-start gap-3 mb-5">
+        <Avatar name={inquiry.name} size={42} />
+        <div className="min-w-0">
+          <p className="ecc-display text-3xl leading-tight" style={{ color: C.ink }}>{inquiry.name}</p>
+          <p className="text-sm mt-1" style={{ color: C.charcoal }}>{inquiry.email || "No email"} • {inquiry.phone || "No phone"}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <InfoBlock label="Session type" value={inquiry.sessionType} />
+        <InfoBlock label="Budget" value={inquiry.budgetRange || "Not provided"} />
+        <InfoBlock label="Preferred date" value={inquiry.desiredDate || "TBD"} />
+        <InfoBlock label="Location" value={inquiry.location || "Not provided"} />
+      </div>
+
+      <div className="rounded-2xl p-4 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+        <p className="text-[10px] uppercase tracking-[0.25em] mb-1.5" style={{ color: C.taupe }}>Package requested</p>
+        <select
+          value={inquiry.packageId || ""}
+          onChange={(event) => actions.patchInquiry(inquiry.id, { packageId: event.target.value })}
+          className="w-full px-3 py-2.5 rounded-xl text-sm mb-2"
+          style={{ border: `1px solid ${C.line}`, color: C.ink, background: "#fff" }}
+        >
+          <option value="">No package selected</option>
+          {packageOptions.map((pkg) => <option key={pkg.id} value={pkg.id}>{pkg.name} — {formatCurrency(pkg.price)}</option>)}
+        </select>
+        <p className="text-xs" style={{ color: C.charcoal }}>
+          This package becomes the default quote option and loads the matching quote/email language.
+        </p>
+        {selectedPackage && <p className="text-xs mt-2" style={{ color: C.taupe }}>{selectedPackage.description}</p>}
+      </div>
+
+      <div className="rounded-2xl p-4 mb-5" style={{ border: `1px solid ${C.line}` }}>
+        <p className="text-[10px] uppercase tracking-[0.25em] mb-2" style={{ color: C.taupe }}>Client notes / form answer</p>
+        <p className="text-sm leading-7 whitespace-pre-wrap" style={{ color: C.ink }}>{inquiry.notes || "No notes submitted."}</p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button onClick={onStartQuote} className="px-4 py-2.5 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>
+          {inquiry.clientId ? "Continue quote" : "Approve + draft quote"}
+        </button>
+        {inquiry.status === "new" && (
+          <button onClick={() => actions.approveInquiry(inquiry.id)} className="px-4 py-2.5 rounded-full text-sm font-medium" style={{ background: C.cream, color: C.ink }}>
+            Approve only
+          </button>
+        )}
+        {inquiry.clientId && (
+          <button onClick={() => onOpenClient(inquiry.clientId)} className="px-4 py-2.5 rounded-full text-sm font-medium" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+            Open client record
+          </button>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function InfoBlock({ label, value }) {
+  return (
+    <div className="rounded-2xl p-3" style={{ background: C.bg }}>
+      <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>{label}</p>
+      <p className="text-sm mt-1 font-medium" style={{ color: C.ink }}>{value || "—"}</p>
     </div>
   );
 }
 
 function ClientsPage({ state, selectedBundle, filteredClients, actions, setPage }) {
   const [statusFilter, setStatusFilter] = useState("all");
-  const [visibleCount, setVisibleCount] = useState(12);
+  const [visibleCount, setVisibleCount] = useState(24);
   const [localQuery, setLocalQuery] = useState("");
+  const [openInquiryId, setOpenInquiryId] = useState(null);
 
   const searchedClients = filteredClients.filter((client) => {
     const needle = localQuery.trim().toLowerCase();
@@ -1002,6 +1110,7 @@ function ClientsPage({ state, selectedBundle, filteredClients, actions, setPage 
     return true;
   });
   const visible = scoped.slice(0, visibleCount);
+  const openInquiry = state.inquiries.find((entry) => entry.id === openInquiryId);
 
   const filters = [
     { key: "all", label: `All (${withStage.length})` },
@@ -1010,26 +1119,51 @@ function ClientsPage({ state, selectedBundle, filteredClients, actions, setPage 
     { key: "lost", label: "Lost / Archived" },
   ];
 
+  if (!selectedBundle.client) {
+    return (
+      <>
+        <ContactDirectoryView
+          state={state}
+          clients={state.clients}
+          inquiries={state.inquiries}
+          actions={actions}
+          setPage={setPage}
+          openInquiry={(id) => setOpenInquiryId(id)}
+        />
+        {openInquiry && (
+          <InquiryDetailModal
+            inquiry={openInquiry}
+            packages={state.packages}
+            actions={actions}
+            onClose={() => setOpenInquiryId(null)}
+            onOpenClient={(clientId) => { actions.selectClient(clientId); setOpenInquiryId(null); }}
+            onStartQuote={() => { actions.startQuoteFromInquiry(openInquiry.id); setOpenInquiryId(null); setPage("quotes"); }}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[380px_1fr] gap-5">
+    <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-5">
       <Card className="p-4">
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-2">
           <div>
             <SectionLabel icon={Users}>Client Records</SectionLabel>
-            <p className="text-xs px-5 -mt-1" style={{ color: C.taupe }}>{scoped.length} visible · built to keep working when this becomes 100+ clients</p>
+            <p className="text-xs px-5 -mt-1" style={{ color: C.taupe }}>{scoped.length} visible · 100+ client directory behavior</p>
           </div>
-          {selectedBundle.client && <button onClick={() => actions.selectClient(null)} className="text-xs underline mt-2" style={{ color: C.charcoal }}>List only</button>}
+          <button onClick={() => actions.selectClient(null)} className="text-xs underline mt-2" style={{ color: C.charcoal }}>All contacts</button>
         </div>
         <div className="mx-5 mb-3 flex items-center gap-2 px-3 py-2 rounded-full" style={{ background: C.bg }}>
           <Search size={14} color={C.taupe} />
-          <input value={localQuery} onChange={(event) => { setLocalQuery(event.target.value); setVisibleCount(12); }} placeholder="Search clients by name, email, phone, tag..." className="bg-transparent outline-none text-sm w-full" style={{ color: C.ink }} />
+          <input value={localQuery} onChange={(event) => { setLocalQuery(event.target.value); setVisibleCount(24); }} placeholder="Search clients by name, email, phone, tag..." className="bg-transparent outline-none text-sm w-full" style={{ color: C.ink }} />
           {localQuery && <button onClick={() => setLocalQuery("")}><X size={13} color={C.taupe} /></button>}
         </div>
         <div className="flex gap-1.5 px-5 pb-3 overflow-x-auto ecc-scrollbar">
           {filters.map((filter) => (
             <button
               key={filter.key}
-              onClick={() => { setStatusFilter(filter.key); setVisibleCount(8); }}
+              onClick={() => { setStatusFilter(filter.key); setVisibleCount(24); }}
               className="text-xs px-3 py-1.5 rounded-full font-medium shrink-0"
               style={{ background: statusFilter === filter.key ? C.charcoal : C.bg, color: statusFilter === filter.key ? "#fff" : C.charcoal }}
             >
@@ -1047,10 +1181,10 @@ function ClientsPage({ state, selectedBundle, filteredClients, actions, setPage 
                 className="w-full flex items-center gap-2.5 p-2.5 rounded-xl text-left"
                 style={{ background: active ? C.cream : "#fff", border: `1px solid ${active ? C.taupe : C.line}` }}
               >
-                <Avatar name={client.name} size={30} />
+                <Avatar name={client.name} size={34} />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate" style={{ color: C.ink }}>{client.name}</p>
-                  <p className="text-xs truncate" style={{ color: C.charcoal }}>{client.sessionType}</p>
+                  <p className="text-xs truncate" style={{ color: C.charcoal }}>{client.email || client.sessionType}</p>
                 </div>
                 <Pill tone={bundle.booking.isBooked ? "done" : "info"}>{PIPELINE_LABELS[bundle.stage]}</Pill>
               </button>
@@ -1059,45 +1193,143 @@ function ClientsPage({ state, selectedBundle, filteredClients, actions, setPage 
           {scoped.length === 0 && <p className="text-sm px-3 py-2" style={{ color: C.taupe }}>No clients match this filter.</p>}
         </div>
         {visibleCount < scoped.length && (
-          <button onClick={() => setVisibleCount((count) => count + 24)} className="w-full mt-3 py-2 rounded-xl text-xs font-medium" style={{ background: C.bg, color: C.charcoal }}>
+          <button onClick={() => setVisibleCount((count) => count + 48)} className="w-full mt-3 py-2 rounded-xl text-xs font-medium" style={{ background: C.bg, color: C.charcoal }}>
             Show more ({scoped.length - visibleCount} remaining)
           </button>
         )}
       </Card>
 
-      <Card className="p-5">
-        {!selectedBundle.client ? (
-          <EmptyState title="No client selected" body="Pick a client to inspect the real linked records and booking requirements." />
-        ) : (
-          <>
-            <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
-              <div className="flex items-center gap-3">
-                <Avatar name={selectedBundle.client.name} size={44} />
-                <div>
-                  <p className="ecc-display text-3xl leading-tight" style={{ color: C.ink }}>{selectedBundle.client.name}</p>
-                  <p className="text-sm mt-1" style={{ color: C.charcoal }}>
-                    {selectedBundle.client.email} • {selectedBundle.client.phone}
-                  </p>
+      <ClientDetailPanel selectedBundle={selectedBundle} setPage={setPage} />
+    </div>
+  );
+}
+
+function ContactDirectoryView({ state, clients, inquiries, actions, setPage, openInquiry }) {
+  const [tab, setTab] = useState("all");
+  const [query, setQuery] = useState("");
+  const leads = inquiries.filter((entry) => !entry.clientId || entry.status === "new");
+  const clientRows = clients.map((client) => ({ id: client.id, type: "client", name: client.name, email: client.email, subtitle: client.sessionType, initials: client.name, client }));
+  const leadRows = leads.map((inquiry) => ({ id: inquiry.id, type: "lead", name: inquiry.name, email: inquiry.email, subtitle: inquiry.sessionType, initials: inquiry.name, inquiry }));
+  const allRows = [...clientRows, ...leadRows]
+    .filter((row) => tab === "all" || (tab === "clients" ? row.type === "client" : tab === "leads" ? row.type === "lead" : !row.email))
+    .filter((row) => {
+      const needle = query.trim().toLowerCase();
+      if (!needle) return true;
+      return [row.name, row.email, row.subtitle].some((value) => String(value || "").toLowerCase().includes(needle));
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const groups = allRows.reduce((acc, row) => {
+    const letter = (row.name?.[0] || "#").toUpperCase();
+    if (!acc[letter]) acc[letter] = [];
+    acc[letter].push(row);
+    return acc;
+  }, {});
+  const tabs = [
+    ["all", "All", clientRows.length + leadRows.length],
+    ["clients", "Clients", clientRows.length],
+    ["leads", "Leads", leadRows.length],
+    ["other", "Other", allRows.filter((row) => !row.email).length],
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="ecc-display text-4xl" style={{ color: C.ink }}>Contacts</p>
+          <p className="text-sm mt-1" style={{ color: C.charcoal }}>Client records and unconverted leads in one fast mobile-style directory.</p>
+        </div>
+        <button onClick={() => setPage("inquiries")} className="w-12 h-12 rounded-full flex items-center justify-center text-white" style={{ background: C.forest }}>
+          <Plus size={22} />
+        </button>
+      </div>
+
+      <Card className="p-4">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl" style={{ background: C.bg }}>
+          <Search size={18} color={C.taupe} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name or email" className="bg-transparent outline-none w-full text-sm" style={{ color: C.ink }} />
+          {query && <button onClick={() => setQuery("")}><X size={14} color={C.taupe} /></button>}
+        </div>
+        <div className="flex gap-8 overflow-x-auto ecc-scrollbar px-1 pt-4">
+          {tabs.map(([key, label, count]) => (
+            <button key={key} onClick={() => setTab(key)} className="pb-3 text-sm font-medium shrink-0 relative" style={{ color: tab === key ? C.ink : C.charcoal }}>
+              {label} <span style={{ color: C.taupe }}>({count})</span>
+              {tab === key && <span className="absolute left-0 right-0 -bottom-px h-0.5" style={{ background: C.forest }} />}
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="overflow-hidden">
+        {Object.keys(groups).length === 0 && <p className="p-5 text-sm" style={{ color: C.taupe }}>No contacts match.</p>}
+        {Object.entries(groups).map(([letter, rows]) => (
+          <div key={letter}>
+            <p className="px-5 pt-5 pb-2 text-sm font-medium" style={{ color: C.taupe }}>{letter}</p>
+            {rows.map((row) => (
+              <button
+                key={`${row.type}-${row.id}`}
+                onClick={() => {
+                  if (row.type === "client") actions.selectClient(row.id);
+                  else openInquiry(row.id);
+                }}
+                className="w-full flex items-center gap-4 px-5 py-3 text-left"
+                style={{ borderTop: `1px solid ${C.line}` }}
+              >
+                <Avatar name={row.initials} size={44} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate" style={{ color: C.ink }}>{row.name}</p>
+                  <p className="text-sm truncate" style={{ color: C.charcoal }}>{row.email || row.subtitle}</p>
                 </div>
-              </div>
-              <StatusLight tone={selectedBundle.booking.isBooked ? "green" : "yellow"} label={selectedBundle.booking.isBooked ? "Booked" : PIPELINE_LABELS[selectedBundle.stage]} />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
-              <SummaryChip label="Quotes" value={String(selectedBundle.quotes.length)} onClick={() => setPage("quotes")} />
-              <SummaryChip label="Contracts" value={String(selectedBundle.contracts.length)} onClick={() => setPage("contracts")} />
-              <SummaryChip label="Invoices" value={String(selectedBundle.invoices.length)} onClick={() => setPage("invoices")} />
-              <SummaryChip label="Portal Access" value={selectedBundle.projectStatus.portalAccessSent ? "Sent" : "Pending"} onClick={() => setPage("emails")} />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <ActionCard title="Build quote" body="Create a proposal sourced from your template logic." actionLabel="Open quotes" onClick={() => setPage("quotes")} />
-              <ActionCard title="Advance booking" body="Project creation stays locked until quote, contract, and payment are complete." actionLabel="Open project flow" onClick={() => setPage("projects")} />
-              <ActionCard title="Payment and calendar" body="Track manual or Stripe payments, then send availability and ICS invite." actionLabel="Open sessions" onClick={() => setPage("sessions")} />
-              <ActionCard title="Portal content" body="Prepare the planning board once the booking gate has been met." actionLabel="Open portal" onClick={() => setPage("portal")} />
-            </div>
-          </>
-        )}
+                <Pill tone={row.type === "client" ? "done" : "warn"}>{row.type}</Pill>
+              </button>
+            ))}
+          </div>
+        ))}
       </Card>
     </div>
+  );
+}
+
+function ClientDetailPanel({ selectedBundle, setPage }) {
+  return (
+    <Card className="p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+        <div className="flex items-center gap-3">
+          <Avatar name={selectedBundle.client.name} size={56} />
+          <div>
+            <p className="ecc-display text-4xl leading-tight" style={{ color: C.ink }}>{selectedBundle.client.name}</p>
+            <p className="text-sm mt-1" style={{ color: C.charcoal }}>
+              {selectedBundle.client.email} • {selectedBundle.client.phone}
+            </p>
+            <p className="text-sm mt-1" style={{ color: C.charcoal }}>{selectedBundle.client.sessionType} • {selectedBundle.client.city}</p>
+          </div>
+        </div>
+        <StatusLight tone={selectedBundle.booking.isBooked ? "green" : "yellow"} label={selectedBundle.booking.isBooked ? "Booked" : PIPELINE_LABELS[selectedBundle.stage]} />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
+        <SummaryChip label="Quotes" value={String(selectedBundle.quotes.length)} onClick={() => setPage("quotes")} />
+        <SummaryChip label="Contracts" value={String(selectedBundle.contracts.length)} onClick={() => setPage("contracts")} />
+        <SummaryChip label="Invoices" value={String(selectedBundle.invoices.length)} onClick={() => setPage("invoices")} />
+        <SummaryChip label="Portal Access" value={selectedBundle.projectStatus.portalAccessSent ? "Sent" : "Pending"} onClick={() => setPage("emails")} />
+      </div>
+      {selectedBundle.inquiry && (
+        <div className="rounded-3xl p-4 mb-5" style={{ background: C.bg }}>
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Original inquiry</p>
+            <Pill tone="info">source of truth</Pill>
+          </div>
+          <p className="text-sm" style={{ color: C.ink }}>{selectedBundle.inquiry.notes}</p>
+          <p className="text-xs mt-2" style={{ color: C.charcoal }}>
+            {selectedBundle.inquiry.budgetRange || "No budget"} • {selectedBundle.inquiry.desiredDate || "TBD"} • {selectedBundle.inquiry.location || "No location"}
+          </p>
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ActionCard title="Build quote" body="Start from the inquiry package, budget, preferred date, and notes." actionLabel="Open quotes" onClick={() => setPage("quotes")} />
+        <ActionCard title="Advance booking" body="Project creation stays locked until quote, contract, and payment are complete." actionLabel="Open project flow" onClick={() => setPage("projects")} />
+        <ActionCard title="Payment and calendar" body="Track manual or Stripe payments, then send availability and ICS invite." actionLabel="Open sessions" onClick={() => setPage("sessions")} />
+        <ActionCard title="Portal content" body="Prepare the planning board once the booking gate has been met." actionLabel="Open portal" onClick={() => setPage("portal")} />
+      </div>
+    </Card>
   );
 }
 
@@ -1358,10 +1590,32 @@ function QuotesDashboard({ state, actions }) {
   );
 }
 
+function getQuoteSelectedPackage(quote, packages = []) {
+  const option = (quote?.optionGroups || []).flatMap((group) => {
+    const selectedIds = new Set(group.selectedOptionIds || []);
+    return (group.options || []).filter((entry) => selectedIds.has(entry.id));
+  })[0];
+  if (!option) return null;
+  return packages.find((pkg) => pkg.id === option.packageId) || {
+    id: option.packageId || option.id,
+    name: option.name,
+    description: option.description,
+    price: option.unitPrice,
+  };
+}
+
+function getInquiryPackage(inquiry, packages = []) {
+  if (!inquiry?.packageId) return null;
+  return packages.find((pkg) => pkg.id === inquiry.packageId) || null;
+}
+
 function QuotesPage({ state, selectedBundle, actions, setPage }) {
   const quote = selectedBundle.primaryQuote;
   const [previewOpen, setPreviewOpen] = useState(false);
   const { requestSend, modal: emailModal } = useEmailGate(actions, selectedBundle.client?.id);
+  const inquiryPackage = getInquiryPackage(selectedBundle.inquiry, state.packages);
+  const quotePackage = getQuoteSelectedPackage(quote, state.packages);
+  const sourcePackage = inquiryPackage || quotePackage;
 
   if (!selectedBundle.client) {
     return <QuotesDashboard state={state} actions={actions} />;
@@ -1398,6 +1652,27 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
           </div>
           <p className="ecc-display text-2xl mt-4" style={{ color: C.ink }}>{formatCurrency(quote.total)}</p>
 
+          <div className="rounded-3xl p-4 mt-5" style={{ background: C.bg }}>
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Quote workspace</p>
+                <p className="text-sm mt-1" style={{ color: C.charcoal }}>Inquiry → package → quote → email. Keep the client context here so you do not bounce between pages.</p>
+              </div>
+              {sourcePackage && <Pill tone="info">Default: {sourcePackage.name}</Pill>}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <InfoBlock label="Inquiry package" value={inquiryPackage?.name || "No package selected"} />
+              <InfoBlock label="Budget / date" value={`${selectedBundle.inquiry?.budgetRange || "No budget"} • ${selectedBundle.inquiry?.desiredDate || "TBD"}`} />
+              <InfoBlock label="Location" value={selectedBundle.inquiry?.location || quote.location || "TBD"} />
+            </div>
+            {selectedBundle.inquiry?.notes && (
+              <div className="mt-3 rounded-2xl p-3" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+                <p className="text-[10px] uppercase tracking-[0.25em] mb-1" style={{ color: C.taupe }}>Client inquiry notes</p>
+                <p className="text-sm leading-6" style={{ color: C.ink }}>{selectedBundle.inquiry.notes}</p>
+              </div>
+            )}
+          </div>
+
           <div className="h-px my-6" style={{ background: C.line }} />
 
           <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Session Details</p>
@@ -1414,8 +1689,8 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
           <div className="rounded-3xl p-4 mb-6" style={{ background: C.bg }}>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Package choice boxes</p>
-                <p className="text-xs mt-1" style={{ color: C.charcoal }}>Use these when the client must pick one package before accepting.</p>
+                <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Package decision</p>
+                <p className="text-xs mt-1" style={{ color: C.charcoal }}>These are the package boxes the client chooses from before accepting the quote.</p>
               </div>
               <button onClick={() => actions.addQuotePackageGroup(quote.id, selectedBundle.client?.packageId)} className="px-3 py-2 rounded-full text-xs font-medium text-white" style={{ background: C.forest }}>+ Pick-one group</button>
             </div>
@@ -1577,25 +1852,73 @@ function EmailGateModal({ subject, body, onClose, onSendNow, onSchedule }) {
 function buildEmailDraft(kind, bundle) {
   const name = bundle.client?.name?.split(" ")[0] || "there";
   const sessionType = bundle.client?.sessionType || "session";
+  const quoteOption = bundle.primaryQuote?.optionGroups?.[0]?.options?.find((option) => (bundle.primaryQuote.optionGroups[0].selectedOptionIds || []).includes(option.id));
+  const packageName = quoteOption?.name || "the package we built for you";
+  const sessionKey = sessionType.toLowerCase();
+  const quoteIntro = sessionKey.includes("maternity")
+    ? `I built this around your maternity inquiry, the timing you shared, and ${packageName}.`
+    : sessionKey.includes("newborn")
+      ? `I built this around your newborn inquiry, the session pace, and ${packageName}.`
+      : sessionKey.includes("wedding")
+        ? `I built this around your wedding inquiry, your coverage needs, and ${packageName}.`
+        : sessionKey.includes("family")
+          ? `I built this around your family inquiry, the location notes, and ${packageName}.`
+          : `I built this from your inquiry details and ${packageName}.`;
   switch (kind) {
     case "portal":
-      return { subject: `Your EC Creative Studios portal is ready, ${name}!`, body: `Hi ${name},\n\nYour private planning portal is live. You'll find your documents, vision board, and a direct line to message us — everything for your ${sessionType} in one place.\n\nTalk soon,\nEC Creative Studios` };
+      return { subject: `Your EC Creative Studios portal is ready, ${name}!`, body: `Hi ${name},
+
+Your private planning portal is live. You'll find your documents, vision board, and a direct line to message us, all for your ${sessionType} in one place.
+
+Talk soon,
+EC Creative Studios` };
     case "availability":
-      return { subject: `Pick your session date, ${name}`, body: `Hi ${name},\n\nYour deposit is in and your contract is signed — last step! Head to your portal to choose your session date and time from our open availability.\n\nEC Creative Studios` };
+      return { subject: `Pick your session date, ${name}`, body: `Hi ${name},
+
+Your deposit is in and your contract is signed. Head to your portal to choose your session date and time from our open availability.
+
+EC Creative Studios` };
     case "calendar":
-      return { subject: `Calendar invite: your ${sessionType}`, body: `Hi ${name},\n\nAttached is a calendar invite for your upcoming ${sessionType}. Add it to your calendar so you don't miss it!\n\nEC Creative Studios` };
+      return { subject: `Calendar invite: your ${sessionType}`, body: `Hi ${name},
+
+Attached is a calendar invite for your upcoming ${sessionType}. Add it to your calendar so you do not miss it.
+
+EC Creative Studios` };
     case "reminder":
-      return { subject: `Your session isn't booked yet, ${name}`, body: `Hi ${name},\n\nJust a friendly note — your session isn't officially booked until your contract is signed and your invoice is paid. Please take a moment to finish those steps so we can secure your date.\n\nEC Creative Studios` };
+      return { subject: `Your session is not booked yet, ${name}`, body: `Hi ${name},
+
+Your session is not officially booked until your contract is signed and your invoice is paid. Please finish those steps so we can secure your date.
+
+EC Creative Studios` };
     case "quote":
-      return { subject: `Your custom quote from EC Creative Studios, ${name}`, body: `Hi ${name},\n\nHere's your quote for ${sessionType} — ${formatCurrency(bundle.primaryQuote?.total || 0)} total. Take a look and let us know if you'd like to move forward.\n\nEC Creative Studios` };
+      return { subject: `${packageName} quote from EC Creative Studios`, body: `Hi ${name},
+
+${quoteIntro}
+
+Your current quote total is ${formatCurrency(bundle.primaryQuote?.total || 0)}. You can review the package, optional add-ons, and next steps from your client portal before accepting.
+
+Once the quote is accepted, we will move into contract and invoice so your date can be secured.
+
+EC Creative Studios` };
     case "contract":
-      return { subject: `Please review and sign your contract, ${name}`, body: `Hi ${name},\n\nYour contract for ${sessionType} is ready for signature. Please review the terms and sign at your earliest convenience to secure your booking.\n\nEC Creative Studios` };
+      return { subject: `Please review and sign your contract, ${name}`, body: `Hi ${name},
+
+Your contract for ${sessionType} is ready for signature. Please review the terms and sign so we can keep your booking moving.
+
+EC Creative Studios` };
     case "invoice":
-      return { subject: `Invoice ready, ${name}`, body: `Hi ${name},\n\nYour invoice for ${formatCurrency(bundle.primaryInvoice?.balanceDue || 0)} is ready. You can pay directly from your portal.\n\nEC Creative Studios` };
+      return { subject: `Invoice ready, ${name}`, body: `Hi ${name},
+
+Your invoice for ${formatCurrency(bundle.primaryInvoice?.balanceDue || 0)} is ready. You can pay directly from your portal.
+
+EC Creative Studios` };
     default:
-      return { subject: `A message from EC Creative Studios`, body: `Hi ${name},\n\n` };
+      return { subject: `A message from EC Creative Studios`, body: `Hi ${name},
+
+` };
   }
 }
+
 
 function Modal({ onClose, title, children }) {
   return (
@@ -2708,29 +3031,15 @@ function GalleryPreviewImagePicker({ onPick }) {
 }
 
 function GalleryLinkCard({ galleryLink }) {
-  let domain = "";
-  try { domain = new URL(galleryLink.url).hostname.replace("www.", ""); } catch { domain = galleryLink.url; }
   return (
-    <a href={galleryLink.url || "#"} target="_blank" rel="noreferrer" className="block rounded-2xl overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
-      <div className="aspect-[16/9] flex items-center justify-center" style={{ background: galleryLink.previewImage ? "transparent" : C.bg }}>
-        {galleryLink.previewImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={galleryLink.previewImage} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-center px-6" style={{ background: `linear-gradient(135deg, ${C.cream}, ${C.bg})` }}>
-            <ImageIcon size={30} color={C.taupe} />
-            <p className="ecc-display text-2xl mt-3" style={{ color: C.ink }}>{galleryLink.title || "Pixieset Gallery"}</p>
-            <p className="text-xs mt-1" style={{ color: C.taupe }}>Preview image not added yet. Link still opens normally.</p>
-          </div>
-        )}
-      </div>
-      <div className="p-3" style={{ background: "#fff" }}>
-        <p className="text-sm font-medium" style={{ color: C.ink }}>{galleryLink.title || "Your Gallery"}</p>
-        <p className="text-xs mt-0.5" style={{ color: C.taupe }}>{domain}</p>
-      </div>
-    </a>
+    <LinkPreviewCard
+      link={galleryLink}
+      fallbackTitle="Pixieset Gallery"
+      helperText="Preview image not found yet. The link still opens normally."
+    />
   );
 }
+
 
 function ImageManager({ title, description, images, onChange, footer }) {
   const [urlDraft, setUrlDraft] = useState("");
@@ -3387,52 +3696,175 @@ const TEMPLATE_TABS = [
 
 const SEED_TEMPLATES = {
   contracts: [
-    { id: "c1", name: "Maternity Session Contract", created: "Jan 17, 2026", body: "This agreement outlines the terms of {{client_name}}'s session on {{session_date}}.", settings: { signatureRequired: true, documentExpiry: false, documentReminders: true } },
-    { id: "c2", name: "Wedding Photography Contract", created: "Jun 18, 2025", body: "Photography services agreement between EC Creative Studios and {{client_name}}.", settings: { signatureRequired: true, documentExpiry: false, documentReminders: true } },
+    {
+      id: "c1",
+      name: "Maternity Session Contract",
+      description: "Standard portrait agreement with payment, reschedule, image rights, and signature blocks.",
+      created: "Jan 17, 2026",
+      audience: "Booked maternity clients",
+      trigger: "After quote acceptance",
+      sessionType: "Maternity Session",
+      status: "Active",
+      body: `This agreement is between EC Creative Studios and {{client_name}} for {{session_type}} on {{session_date}} at {{location}}.`,
+      modules: [
+        { id: "c1m1", type: "scope", label: "Scope of work", body: `Services include planning, photography coverage, editing, and gallery delivery for {{session_type}}.`, required: true },
+        { id: "c1m2", type: "payment", label: "Payment terms", body: `A deposit of {{deposit}} secures the booking. Remaining balance {{balance_due}} is due before the session.`, required: true },
+        { id: "c1m3", type: "signature", label: "Signature block", body: `Client signature: ____________________\nEC Creative Studios: ____________________`, required: true },
+      ],
+      settings: { signatureRequired: true, documentExpiry: false, documentReminders: true },
+    },
+    {
+      id: "c2",
+      name: "Wedding Photography Contract",
+      description: "Wedding agreement with coverage, delivery, payment schedule, cancellation, and usage rights.",
+      created: "Jun 18, 2025",
+      audience: "Wedding clients",
+      trigger: "After accepted wedding quote",
+      sessionType: "Wedding",
+      status: "Active",
+      body: `Photography services agreement between EC Creative Studios and {{client_name}} for {{session_type}}.`,
+      modules: [],
+      settings: { signatureRequired: true, documentExpiry: false, documentReminders: true },
+    },
   ],
   invoices: [
-    { id: "i1", name: "Deposit Invoice", created: "Feb 1, 2026", body: "Deposit due to secure {{session_date}}.", settings: { paymentDue: "Within 7 days" } },
-    { id: "i2", name: "Final Balance Invoice", created: "Mar 4, 2026", body: "Remaining balance due before session.", settings: { paymentDue: "Within 30 days" } },
+    {
+      id: "i1",
+      name: "Deposit Invoice",
+      description: "Deposit invoice with payment methods, due date, and booking lock language.",
+      created: "Feb 1, 2026",
+      audience: "Clients after contract sent",
+      trigger: "When booking deposit is needed",
+      sessionType: "All sessions",
+      status: "Active",
+      body: `Deposit due to secure {{session_date}}. Amount due: {{deposit}}.`,
+      modules: [],
+      settings: { paymentDue: "Within 7 days" },
+    },
+    {
+      id: "i2",
+      name: "Final Balance Invoice",
+      description: "Final payment invoice before session or delivery depending on package.",
+      created: "Mar 4, 2026",
+      audience: "Booked clients",
+      trigger: "Before session date",
+      sessionType: "All sessions",
+      status: "Active",
+      body: `Remaining balance due before session. Balance: {{balance_due}}.`,
+      modules: [],
+      settings: { paymentDue: "Within 30 days" },
+    },
   ],
   quotes: [
-    { id: "q1", name: "Signature Experience Quote", created: "Jan 2, 2026", body: "A fully curated photography experience for {{client_name}}.", settings: { autoCreateInvoice: true, documentExpiry: false, documentReminders: false } },
+    {
+      id: "q1",
+      name: "Maternity Portrait Quote",
+      description: "Package-first quote with pick-one package group, add-ons, payment plan, and expiration.",
+      created: "Jan 2, 2026",
+      audience: "Maternity inquiries",
+      trigger: "After inquiry approval",
+      sessionType: "Maternity Session",
+      status: "Active",
+      body: `Hi {{client_name}}, this quote was built from your {{session_type}} inquiry. Requested package: {{package_name}}.`,
+      modules: [
+        { id: "q1m1", type: "package_group", label: "Pick-one package group", body: `Client must choose one package before accepting the quote.`, required: true },
+        { id: "q1m2", type: "addons", label: "Optional add-ons", body: `Optional add-ons update the quote total only when selected.`, required: false },
+      ],
+      settings: { autoCreateInvoice: true, documentExpiry: false, documentReminders: false },
+    },
   ],
   questionnaires: [
-    { id: "qq1", name: "Session Prep Questionnaire", created: "Jan 10, 2026", body: "Help us prepare for your session.", settings: { documentExpiry: false, documentReminders: true } },
+    {
+      id: "qq1",
+      name: "Session Prep Questionnaire",
+      description: "Pre-session form for vibe, people, wardrobe, location, and special notes.",
+      created: "Jan 10, 2026",
+      audience: "Booked clients",
+      trigger: "After deposit paid",
+      sessionType: "All sessions",
+      status: "Draft",
+      body: `Help us prepare for your session. Answer these before {{session_date}}.`,
+      modules: [],
+      settings: { documentExpiry: false, documentReminders: true },
+    },
   ],
   emails: [
-    { id: "e1", name: "Welcome Email — New Inquiry", created: "Jan 5, 2026", subject: "Thanks for reaching out, {{client_name}}!", body: "We're so excited to learn more about your {{session_type}}." },
-    { id: "e2", name: "Booking Confirmation", created: "Jan 5, 2026", subject: "You're booked, {{client_name}}!", body: "Your {{session_type}} is confirmed for {{session_date}}." },
+    {
+      id: "e1",
+      name: "Maternity Quote Email",
+      description: "Sends the right wording when the inquiry package defaults into a maternity quote.",
+      created: "Jan 5, 2026",
+      audience: "Maternity inquiries",
+      trigger: "Send quote",
+      sessionType: "Maternity Session",
+      status: "Active",
+      subject: "Your {{package_name}} quote from EC Creative Studios",
+      body: `Hi {{client_name}},\n\nI built this around your maternity inquiry and {{package_name}}. Review your quote total of {{total}} in the portal, choose any add-ons, and accept when ready.\n\nEC Creative Studios`,
+      modules: [],
+    },
+    {
+      id: "e2",
+      name: "Booking Confirmation",
+      description: "Confirms a booking after contract and payment clear.",
+      created: "Jan 5, 2026",
+      audience: "Booked clients",
+      trigger: "After deposit paid",
+      sessionType: "All sessions",
+      status: "Active",
+      subject: "You're booked, {{client_name}}!",
+      body: `Your {{session_type}} is confirmed for {{session_date}}.`,
+      modules: [],
+    },
   ],
 };
 
-const TEMPLATE_VARIABLES = ["{{client_name}}", "{{client_email}}", "{{session_type}}", "{{session_date}}", "{{session_time}}", "{{location}}", "{{total}}", "{{deposit}}", "{{balance_due}}", "{{invoice_number}}"];
+const TEMPLATE_VARIABLES = ["{{client_name}}", "{{client_email}}", "{{phone}}", "{{session_type}}", "{{package_name}}", "{{session_date}}", "{{session_time}}", "{{location}}", "{{total}}", "{{deposit}}", "{{balance_due}}", "{{invoice_number}}", "{{gallery_link}}", "{{portal_link}}"];
 
 const TEMPLATE_MODULE_PRESETS = {
   contracts: [
-    { type: "parties", label: "Parties block", body: "Client: {{client_name}}\nStudio: EC Creative Studios" },
-    { type: "clause", label: "Payment terms clause", body: "Payment terms: {{deposit}} is due to secure the date. Remaining balance is due before the session." },
-    { type: "signature", label: "Client + studio signatures", body: "Client signature: ____________________\nEC Creative Studios: ____________________" },
+    { type: "parties", label: "Parties block", body: `Client: {{client_name}}\nStudio: EC Creative Studios\nSession: {{session_type}}` },
+    { type: "scope", label: "Scope of work", body: `EC Creative Studios will provide planning, photography coverage, editing, and online gallery delivery for {{session_type}}.` },
+    { type: "deliverables", label: "Deliverables", body: `Final edited images are delivered through an online gallery. Raw files are not included unless agreed in writing.` },
+    { type: "payment", label: "Payment terms", body: `A deposit of {{deposit}} secures the date. Remaining balance {{balance_due}} is due before the session.` },
+    { type: "reschedule", label: "Reschedule / cancellation", body: `Reschedules depend on availability. Cancelled sessions forfeit the deposit unless otherwise approved by EC Creative Studios.` },
+    { type: "usage", label: "Usage rights", body: `Client receives personal-use rights. EC Creative Studios retains copyright and portfolio rights unless a privacy addendum is signed.` },
+    { type: "model_release", label: "Model release", body: `Client grants permission for EC Creative Studios to use selected images for portfolio, website, social media, and promotional use unless opted out in writing.` },
+    { type: "signature", label: "Client + studio signatures", body: `Client signature: ____________________\nEC Creative Studios: ____________________\nDate: ____________________` },
   ],
   invoices: [
-    { type: "payment", label: "Payment schedule", body: "Amount due: {{balance_due}}\nDue date: {{session_date}}" },
-    { type: "method", label: "Payment methods", body: "Card, Zelle, or approved manual payment." },
-    { type: "late", label: "Past-due note", body: "Past-due invoices may pause delivery or booking progress." },
+    { type: "summary", label: "Invoice summary", body: `Invoice {{invoice_number}} for {{client_name}}. Amount due: {{balance_due}}.` },
+    { type: "line_items", label: "Itemized charges", body: `List each package, add-on, travel fee, studio rental, rush fee, discount, and tax as separate rows.` },
+    { type: "schedule", label: "Payment schedule", body: `Deposit: {{deposit}}\nFinal balance: {{balance_due}}\nDue date: {{session_date}}` },
+    { type: "method", label: "Payment methods", body: `Accepted payment methods: Card, Zelle, or approved manual payment.` },
+    { type: "refund", label: "Refund / cancellation note", body: `Refunds and cancellations follow the signed agreement. Manual refunds should be logged against the original payment.` },
+    { type: "late", label: "Past-due note", body: `Past-due invoices may pause booking, delivery, or gallery access.` },
   ],
   quotes: [
-    { type: "package_group", label: "Pick-one package group", body: "Choose one package option before accepting this quote." },
-    { type: "addons", label: "Optional add-ons", body: "Optional add-ons may be selected before acceptance and will update the total." },
-    { type: "expiration", label: "Quote expiration", body: "This quote is valid until the expiration date listed above." },
+    { type: "intro", label: "Inquiry-based intro", body: `This quote is built from the inquiry details provided by {{client_name}} for {{session_type}}.` },
+    { type: "package_group", label: "Pick-one package group", body: `Client must choose one package option before accepting this quote. Default requested package: {{package_name}}.` },
+    { type: "comparison", label: "Package comparison", body: `Show the package cards side by side with deliverables, session length, location notes, and total price.` },
+    { type: "addons", label: "Optional add-ons", body: `Optional add-ons may be selected before acceptance and will update the quote total.` },
+    { type: "payment_plan", label: "Payment plan", body: `Deposit due to secure the booking. Remaining balance due before the session.` },
+    { type: "expiration", label: "Quote expiration", body: `This quote is valid until the expiration date listed above.` },
+    { type: "next_steps", label: "Next steps", body: `Accept quote → sign contract → pay invoice → choose date/time → prepare session.` },
   ],
   questionnaires: [
-    { type: "short", label: "Short-answer field", body: "Question: What should we know before your session?" },
-    { type: "choice", label: "Multiple-choice field", body: "Question: Which style feels most like you?\nOptions: Editorial, Lifestyle, Classic, Documentary" },
-    { type: "upload", label: "Reference upload", body: "Prompt: Upload or paste inspiration images for your session." },
+    { type: "contact", label: "Contact confirmation", body: `Confirm name, email, phone, and preferred communication method.` },
+    { type: "goals", label: "Session goals", body: `Question: What do you want these images to feel like or preserve?` },
+    { type: "style", label: "Style preference", body: `Question: Which style fits you best?\nOptions: Editorial, Lifestyle, Classic, Documentary, Warm and candid` },
+    { type: "wardrobe", label: "Wardrobe notes", body: `Question: What outfits, colors, or pieces are you considering?` },
+    { type: "location", label: "Location notes", body: `Question: Do you have a location preference or accessibility needs?` },
+    { type: "people", label: "People included", body: `Question: Who will be photographed? Include names and ages for children.` },
+    { type: "upload", label: "Reference upload", body: `Prompt: Upload or paste inspiration images for your session.` },
   ],
   emails: [
-    { type: "subject", label: "Subject line", body: "Subject: Your {{session_type}} details" },
-    { type: "cta", label: "Portal CTA", body: "Button: Open your client portal" },
-    { type: "footer", label: "Studio signature", body: "EC Creative Studios\nMiami, FL" },
+    { type: "inquiry_reply", label: "Inquiry reply", body: `Hi {{client_name}},\n\nThank you for reaching out about {{session_type}}. I reviewed your inquiry and can help you shape this into a clear session plan.` },
+    { type: "quote_delivery", label: "Quote delivery", body: `Your {{package_name}} quote is ready. Review the package, add-ons, total, and next steps in your portal.` },
+    { type: "contract_nudge", label: "Contract nudge", body: `Your date is not fully secured until the contract is signed and invoice is paid.` },
+    { type: "invoice_reminder", label: "Invoice reminder", body: `Your invoice balance of {{balance_due}} is still open. You can pay from the portal.` },
+    { type: "session_prep", label: "Session prep", body: `Here are the final details for your {{session_type}}: date, time, location, wardrobe notes, and arrival instructions.` },
+    { type: "gallery_delivery", label: "Gallery delivery", body: `Your gallery is ready: {{gallery_link}}` },
+    { type: "footer", label: "Studio signature", body: `EC Creative Studios\nMiami, FL\n{{portal_link}}` },
   ],
 };
 
@@ -3455,9 +3887,10 @@ function TemplatesPage() {
   const newTemplate = (type = tab) => {
     const id = `${type}_${Date.now()}`;
     const label = TEMPLATE_TABS.find((entry) => entry.key === type)?.label || "Template";
+    const baseBlank = { id, created: "Just now", description: "", audience: "", trigger: "Manual", sessionType: "All sessions", status: "Draft", body: "", modules: [] };
     const blank = type === "emails"
-      ? { id, name: "Untitled Email Template", created: "Just now", subject: "", body: "", modules: [] }
-      : { id, name: `Untitled ${label.replace(/s$/, "")} Template`, created: "Just now", body: "", modules: [], settings: type === "invoices" ? { paymentDue: "Within 30 days" } : type === "quotes" ? { autoCreateInvoice: true, documentExpiry: false, documentReminders: false } : { documentExpiry: false, documentReminders: false, ...(type === "contracts" ? { signatureRequired: true } : {}) } };
+      ? { ...baseBlank, name: "Untitled Email Template", subject: "" }
+      : { ...baseBlank, name: `Untitled ${label.replace(/s$/, "")} Template`, settings: type === "invoices" ? { paymentDue: "Within 30 days" } : type === "quotes" ? { autoCreateInvoice: true, documentExpiry: false, documentReminders: false } : { documentExpiry: false, documentReminders: false, ...(type === "contracts" ? { signatureRequired: true } : {}) } };
     setTab(type);
     setData((d) => ({ ...d, [type]: [blank, ...d[type]] }));
     setEditing({ type, id });
@@ -3480,45 +3913,53 @@ function TemplatesPage() {
           <button onClick={() => setEditing(null)} className="px-4 py-2 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>Done</button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4">
-          {editing.type !== "emails" ? (
-            <Card className="p-4 h-fit">
-              <p className="text-xs uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Template Settings</p>
-              <div className="space-y-4">
-                {editing.type === "contracts" && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm" style={{ color: C.ink }}>Signature required</span>
-                    <Toggle checked={!!current.settings.signatureRequired} onChange={(value) => updateSetting("signatureRequired", value)} />
-                  </div>
-                )}
-                {editing.type === "quotes" && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm" style={{ color: C.ink }}>Auto-create invoice</span>
-                    <Toggle checked={!!current.settings.autoCreateInvoice} onChange={(value) => updateSetting("autoCreateInvoice", value)} />
-                  </div>
-                )}
-                {editing.type === "invoices" ? (
-                  <div>
-                    <p className="text-sm mb-1.5" style={{ color: C.ink }}>Payment due</p>
-                    <select value={current.settings.paymentDue} onChange={(event) => updateSetting("paymentDue", event.target.value)} className="w-full px-3 py-2 rounded-xl text-sm" style={{ border: `1px solid ${C.line}` }}>
-                      {["Within 7 days", "Within 14 days", "Within 30 days", "On receipt"].map((option) => <option key={option}>{option}</option>)}
-                    </select>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm" style={{ color: C.ink }}>Document expiry</span>
-                      <Toggle checked={!!current.settings.documentExpiry} onChange={(value) => updateSetting("documentExpiry", value)} />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm" style={{ color: C.ink }}>Document reminders</span>
-                      <Toggle checked={!!current.settings.documentReminders} onChange={(value) => updateSetting("documentReminders", value)} />
-                    </div>
-                  </>
-                )}
+        <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_320px] gap-4">
+          <Card className="p-4 h-fit">
+            <p className="text-xs uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Template Settings</p>
+            <div className="space-y-3">
+              <Field compact label="Description" value={current.description || ""} onChange={(value) => updateField("description", value)} />
+              <Field compact label="Audience" value={current.audience || ""} onChange={(value) => updateField("audience", value)} />
+              <Field compact label="Trigger" value={current.trigger || ""} onChange={(value) => updateField("trigger", value)} />
+              <Field compact label="Default session" value={current.sessionType || ""} onChange={(value) => updateField("sessionType", value)} />
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.25em] mb-1" style={{ color: C.taupe }}>Status</p>
+                <select value={current.status || "Draft"} onChange={(event) => updateField("status", event.target.value)} className="w-full px-3 py-2 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+                  {["Draft", "Active", "Archived", "Automation"].map((option) => <option key={option}>{option}</option>)}
+                </select>
               </div>
-            </Card>
-          ) : <div className="hidden lg:block" />}
+              {editing.type === "contracts" && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm" style={{ color: C.ink }}>Signature required</span>
+                  <Toggle checked={!!current.settings?.signatureRequired} onChange={(value) => updateSetting("signatureRequired", value)} />
+                </div>
+              )}
+              {editing.type === "quotes" && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm" style={{ color: C.ink }}>Auto-create invoice</span>
+                  <Toggle checked={!!current.settings?.autoCreateInvoice} onChange={(value) => updateSetting("autoCreateInvoice", value)} />
+                </div>
+              )}
+              {editing.type === "invoices" ? (
+                <div>
+                  <p className="text-sm mb-1.5" style={{ color: C.ink }}>Payment due</p>
+                  <select value={current.settings?.paymentDue || "Within 30 days"} onChange={(event) => updateSetting("paymentDue", event.target.value)} className="w-full px-3 py-2 rounded-xl text-sm" style={{ border: `1px solid ${C.line}` }}>
+                    {["Within 7 days", "Within 14 days", "Within 30 days", "On receipt"].map((option) => <option key={option}>{option}</option>)}
+                  </select>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm" style={{ color: C.ink }}>Document expiry</span>
+                    <Toggle checked={!!current.settings?.documentExpiry} onChange={(value) => updateSetting("documentExpiry", value)} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm" style={{ color: C.ink }}>Document reminders</span>
+                    <Toggle checked={!!current.settings?.documentReminders} onChange={(value) => updateSetting("documentReminders", value)} />
+                  </div>
+                </>
+              )}
+            </div>
+          </Card>
 
           <Card className="p-5">
             {editing.type === "emails" && (
@@ -3542,9 +3983,11 @@ function TemplatesPage() {
                     <div className="flex items-center gap-2">
                       <input value={module.label} onChange={(event) => updateModule(module.id, { label: event.target.value })} className="flex-1 bg-transparent outline-none text-sm font-medium" style={{ color: C.ink }} />
                       <button onClick={() => updateModule(module.id, { required: !module.required })} className="text-xs px-2 py-1 rounded-full" style={{ background: module.required ? "#eaf1ee" : C.bg, color: module.required ? C.forest : C.taupe }}>{module.required ? "Required" : "Optional"}</button>
+                      <button onClick={() => insertModuleBody(module)} className="text-xs" style={{ color: C.forest }}>Insert</button>
                       <button onClick={() => removeModule(module.id)} className="text-xs" style={{ color: C.red }}>Remove</button>
                     </div>
                     <p className="text-xs mt-1" style={{ color: C.taupe }}>{module.type}</p>
+                    <textarea rows={3} value={module.body || ""} onChange={(event) => updateModule(module.id, { body: event.target.value })} className="w-full mt-2 rounded-xl p-2 text-xs outline-none resize-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
                   </div>
                 ))}
               </div>
@@ -3564,6 +4007,34 @@ function TemplatesPage() {
                 <p className="mt-2">EC Creative Studios _______________________</p>
               </div>
             )}
+          </Card>
+
+          <Card className="p-4 h-fit sticky top-4">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <p className="text-xs uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Live Preview</p>
+              <Pill tone={current.status === "Active" ? "done" : "info"}>{current.status || "Draft"}</Pill>
+            </div>
+            <p className="text-sm font-medium" style={{ color: C.ink }}>{current.name}</p>
+            <p className="text-xs mt-1" style={{ color: C.taupe }}>{current.audience || "No audience"} • {current.trigger || "No trigger"}</p>
+            {editing.type === "emails" && current.subject && (
+              <div className="rounded-xl p-3 mt-3" style={{ background: C.bg }}>
+                <p className="text-[10px] uppercase tracking-[0.25em] mb-1" style={{ color: C.taupe }}>Subject</p>
+                <p className="text-sm" style={{ color: C.ink }}>{current.subject}</p>
+              </div>
+            )}
+            <div className="rounded-xl p-3 mt-3 max-h-72 overflow-y-auto ecc-scrollbar" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+              <RichText text={current.body || "Template body is empty."} className="text-sm leading-6" style={{ color: C.ink }} />
+            </div>
+            <div className="mt-4 space-y-2">
+              <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Modules</p>
+              {(current.modules || []).length === 0 && <p className="text-xs" style={{ color: C.taupe }}>No modules attached.</p>}
+              {(current.modules || []).map((module) => (
+                <div key={module.id} className="flex items-center justify-between gap-2 rounded-xl px-3 py-2" style={{ background: C.bg }}>
+                  <span className="text-xs truncate" style={{ color: C.ink }}>{module.label}</span>
+                  <span className="text-[10px] uppercase" style={{ color: module.required ? C.forest : C.taupe }}>{module.required ? "Required" : "Optional"}</span>
+                </div>
+              ))}
+            </div>
           </Card>
         </div>
       </div>
@@ -3585,14 +4056,24 @@ function TemplatesPage() {
           </button>
         ))}
       </div>
-      <Card>
-        {list.map((template, index) => (
-          <button key={template.id} onClick={() => setEditing({ type: tab, id: template.id })} className="w-full flex items-center justify-between px-5 py-3.5 text-left" style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}` }}>
-            <span className="text-sm font-medium" style={{ color: C.ink }}>{template.name}</span>
-            <span className="text-xs" style={{ color: C.taupe }}>{template.created}</span>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {list.map((template) => (
+          <button key={template.id} onClick={() => setEditing({ type: tab, id: template.id })} className="rounded-3xl p-5 text-left" style={{ border: `1px solid ${C.line}`, background: "#fff" }}>
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <div>
+                <p className="text-sm font-medium" style={{ color: C.ink }}>{template.name}</p>
+                <p className="text-xs mt-1" style={{ color: C.taupe }}>{template.created}</p>
+              </div>
+              <Pill tone={template.status === "Active" ? "done" : "info"}>{template.status || "Draft"}</Pill>
+            </div>
+            <p className="text-sm leading-6 min-h-[48px]" style={{ color: C.charcoal }}>{template.description || "No description yet."}</p>
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              <SummaryChip label="Trigger" value={template.trigger || "Manual"} />
+              <SummaryChip label="Modules" value={String((template.modules || []).length)} />
+            </div>
           </button>
         ))}
-      </Card>
+      </div>
     </div>
   );
 }
