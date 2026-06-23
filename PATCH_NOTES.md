@@ -93,3 +93,54 @@ This is intentional context for why v2 exists — the v1 patch notes were honest
 ### Verification
 - `npm run build` — compiles, lints, and statically prerenders clean after every section above.
 - Existing `localStorage` saves from before this pass will load fine — all new fields (`studioSettings`, `contract.clauses`, catalog-added items) are read with safe fallbacks, so old persisted demo data won't crash the app, it just won't have the new fields until you trigger a Manual Override or recreate the record.
+
+---
+
+## v4 — Workflow, scale, and structure pass (feedback doc + voice transcript)
+
+### Fixed (real bugs)
+- **Stale state when switching clients.** Quotes/Contracts/Invoices/Payments/Projects/Portal Editor now remount (`key={selectedClientId}`) when the selected client changes, so a previous client's open modal, payment draft, or preview state can't leak into the next client's view. This was the root cause behind "the project folder stays open for everybody."
+- **Project empty state was vague.** Now says exactly "No project has been created for this client yet" with a single CTA that routes to whatever step is actually next (quote, contract, invoice, or portal handoff) instead of a dead-end message.
+- **Client portal hero/vision photos already covered in v3** — this pass adds the same real-image treatment to the Gallery (see below).
+
+### Added — Dashboard & navigation
+- Dashboard client search: clicking a name selects/loads the client (stays on Dashboard); clicking the arrow opens their full Clients page. Added a "Clear search" / X control so search has an obvious exit.
+- Dashboard now shows the general aggregate view (Pipeline Overview + Revenue Snapshot + Upcoming Sessions) when no client is selected, exactly as before, and the focused client view when one is picked — this was already right per your notes, just confirmed/preserved.
+- Global client switcher in the Topbar (added last pass) lets you change focus from literally anywhere — confirmed working across every page touched this round.
+
+### Added — Calendar & Availability
+- Real availability system: `state.availability` holds open time slots per date, editable from Calendar via a new "Edit Availability" toggle — click a date, add/remove times.
+- The client-side "Pick your date" flow and the admin Sessions page's manual-schedule shortcut both now read from this real availability instead of a hardcoded slot list. A client can only ever pick a time the studio actually opened.
+- Calendar gained Week and List views alongside Month (List shows every upcoming session with client, type, date, time, location, status, one-tap to open).
+
+### Added — Email discipline
+- Nothing sends blind anymore. Every "Send" action (quote, contract, invoice, portal access, date-selection, calendar invite, not-booked reminder) opens a preview modal first — subject and body are editable, then either "Send now" or "Schedule send" (stored in `state.scheduledEmails`, visible and actionable from the Emails page).
+
+### Added — Quotes / Contracts / Invoices: dashboard-first
+- All three now follow the same rule: no client selected → a real dashboard (status tabs, search, totals where relevant — Invoices shows Total Unpaid / Deposits Pending / Final Pending / Past Due) listing every record across every client. Select a client → the page narrows to just their record, with a "← All quotes/contracts/invoices" link back out. This matches the Inquiries page pattern you already liked.
+
+### Added — Quote/Invoice builder depth
+- Line-item descriptions are now a real expandable textarea with a lightweight Bold/Italic/Bullets/Numbered toolbar (markdown-style, rendered properly in every preview — admin and client). No external rich-text library, just enough formatting to look polished.
+- Items, descriptions, and qty/price now stack with actual room to breathe instead of being squeezed into one row.
+- Add-Ons manager (new page): create/edit/price/delete add-ons, including a real Studio Rental entry plus Extra Hour, Rush Delivery, Travel Fee, and Album Credit as a starting catalog. Linked directly from the quote builder's "+ Add addon" button.
+- Client-must-pick-one package options are explicitly **not** built yet — flagged in the UI itself rather than faked.
+
+### Added — Contracts
+- Legal-document feel: numbered clauses (Scope of Services, Payment Terms, Rescheduling & Cancellation, Usage Rights, Delivery, Liability), each editable, plus a real Photographer/Client parties block and a signature line with printed name + date.
+
+### Added — Payments restructure
+- Payment Overview row (Total Unpaid, Deposits Pending, Final Pending, Past Due) and an Outstanding Payments worklist — every client who owes money, with Send reminder / Copy payment link / Mark paid actions right on the row. Answers exactly what the page should answer instead of feeling like an unstructured grab bag.
+
+### Added — Client Portal
+- Documents are previewable read-only (quote, contract with full clause text, invoice) — clients can reference what they signed without being able to edit it.
+- Pay Now: a real method-choice modal (Card via Stripe / Zelle with instructions) instead of one blind "pay full balance" button.
+- Location card is clickable — opens Apple Maps with the session address.
+- Gallery changed from an image-paste field to an actual Pixieset-link card: title, URL, optional preview image, rendered as a link-preview card (the kind you see in iMessage), with an "Open Gallery" button. Matches the reference screenshot you sent.
+
+### Verification
+- `npm run build` — compiles, lints, and statically prerenders clean after every item above. Checked four times across this pass at natural checkpoints, not just once at the end.
+
+### Still not done, flagged honestly
+- Client-must-pick-one package option groups (radio/checkbox bundles) — noted on the roadmap, not faked.
+- "Schedule send" doesn't actually delay anything server-side (there's no server) — it stores the draft and you trigger "Send now" yourself from the Emails page when ready. Said so in the UI.
+- Multi-session-per-client is still a known gap from v3 — unchanged this pass.

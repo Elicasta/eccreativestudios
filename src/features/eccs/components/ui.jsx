@@ -109,9 +109,10 @@ export const SectionLabel = ({ icon: Icon, children }) => (
   </div>
 );
 
-export const EmptyState = ({ title, body }) => (
+export const EmptyState = ({ title, body, action }) => (
   <Card className="p-10 text-center">
     <p className="ecc-display text-2xl mb-2" style={{ color: C.ink }}>{title}</p>
     <p className="ecc-body text-sm max-w-md mx-auto" style={{ color: C.charcoal }}>{body}</p>
+    {action}
   </Card>
 );

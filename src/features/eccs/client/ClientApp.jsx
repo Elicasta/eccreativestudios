@@ -3,6 +3,7 @@
 import React, { useRef, useState } from "react";
 import {
   CalendarDays,
+  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -18,6 +19,7 @@ import {
   MessageCircle,
   Send,
   Sparkles,
+  X,
 } from "lucide-react";
 import { C } from "../lib/brand";
 import { formatCurrency, PIPELINE_LABELS } from "../lib/crm";
@@ -47,7 +49,7 @@ const SLOT_OPTIONS = [
   { date: "Jul 22, 2026", time: "10:00 AM", locationName: "Dallas Arboretum" },
 ];
 
-export default function ClientApp({ selectedBundle, actions }) {
+export default function ClientApp({ state, selectedBundle, actions }) {
   const [page, setPage] = useState("overview");
   const [drawer, setDrawer] = useState(false);
 
@@ -82,7 +84,7 @@ export default function ClientApp({ selectedBundle, actions }) {
           <StatusLight tone={selectedBundle.stage === "deposit_paid" || selectedBundle.stage === "session_scheduled" ? "green" : "yellow"} label={PIPELINE_LABELS[selectedBundle.stage]} />
         </div>
         <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
-          {page === "overview" && <OverviewPage selectedBundle={selectedBundle} actions={actions} setPage={setPage} />}
+          {page === "overview" && <OverviewPage state={state} selectedBundle={selectedBundle} actions={actions} setPage={setPage} />}
           {page === "documents" && <DocumentsPage selectedBundle={selectedBundle} actions={actions} />}
           {page === "details" && <DetailsPage selectedBundle={selectedBundle} />}
           {page === "vision" && <VisionPage selectedBundle={selectedBundle} />}
@@ -142,13 +144,14 @@ function PortalSidebar({ page, setPage, clientName, sessionType }) {
   );
 }
 
-function OverviewPage({ selectedBundle, actions, setPage }) {
+function OverviewPage({ state, selectedBundle, actions, setPage }) {
   const session = selectedBundle.session;
   const portal = selectedBundle.portal;
   const quote = selectedBundle.primaryQuote;
   const contract = selectedBundle.primaryContract;
   const invoice = selectedBundle.primaryInvoice;
   const heroImage = portal?.visionImages?.[0];
+  const availableDates = (state.availability || []).filter((entry) => entry.times.length > 0);
 
   return (
     <div className="space-y-5">
@@ -193,20 +196,31 @@ function OverviewPage({ selectedBundle, actions, setPage }) {
           <p className="text-sm mb-4" style={{ color: C.charcoal }}>
             Your contract is signed and your deposit is in. Choose the time that works best and we’ll secure it instantly.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {SLOT_OPTIONS.map((slot) => (
-              <button
-                key={`${slot.date}-${slot.time}`}
-                onClick={() => actions.scheduleSession(selectedBundle.client.id, slot)}
-                className="p-4 rounded-2xl text-left"
-                style={{ border: `1px solid ${C.line}` }}
-              >
-                <p className="text-sm font-medium" style={{ color: C.ink }}>{slot.date}</p>
-                <p className="text-xs mt-1" style={{ color: C.charcoal }}>{slot.time}</p>
-                <p className="text-xs mt-1" style={{ color: C.taupe }}>{slot.locationName}</p>
-              </button>
-            ))}
-          </div>
+          {availableDates.length === 0 ? (
+            <p className="text-sm rounded-xl p-4" style={{ background: C.bg, color: C.taupe }}>
+              Your studio hasn't opened any dates yet — check back soon or reach out in Messages.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {availableDates.map((entry) => (
+                <div key={entry.date}>
+                  <p className="text-xs font-medium mb-2" style={{ color: C.ink }}>{entry.date}</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {entry.times.map((time) => (
+                      <button
+                        key={time}
+                        onClick={() => actions.scheduleSession(selectedBundle.client.id, { date: entry.date, time })}
+                        className="p-3 rounded-2xl text-left"
+                        style={{ border: `1px solid ${C.line}` }}
+                      >
+                        <p className="text-sm font-medium" style={{ color: C.ink }}>{time}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       )}
 
@@ -265,10 +279,56 @@ function OverviewPage({ selectedBundle, actions, setPage }) {
   );
 }
 
+function escapeHtml(value) {
+  return (value || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function inlineFormat(value) {
+  return value.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/(?<!\*)\*(.+?)\*(?!\*)/g, "<em>$1</em>");
+}
+function renderRichText(text) {
+  const lines = escapeHtml(text).split("\n");
+  let html = "";
+  let listType = null;
+  lines.forEach((line) => {
+    const bullet = line.match(/^-\s+(.*)/);
+    const numbered = line.match(/^\d+\.\s+(.*)/);
+    if (bullet) {
+      if (listType !== "ul") { if (listType) html += `</${listType}>`; html += "<ul style='margin:4px 0;padding-left:18px;'>"; listType = "ul"; }
+      html += `<li>${inlineFormat(bullet[1])}</li>`;
+    } else if (numbered) {
+      if (listType !== "ol") { if (listType) html += `</${listType}>`; html += "<ol style='margin:4px 0;padding-left:18px;'>"; listType = "ol"; }
+      html += `<li>${inlineFormat(numbered[1])}</li>`;
+    } else {
+      if (listType) { html += `</${listType}>`; listType = null; }
+      html += line ? `<p style='margin:0 0 4px 0;'>${inlineFormat(line)}</p>` : "<br/>";
+    }
+  });
+  if (listType) html += `</${listType}>`;
+  return html;
+}
+const RichText = ({ text, className, style }) => (
+  <div className={className} style={style} dangerouslySetInnerHTML={{ __html: renderRichText(text || "") }} />
+);
+
+function ClientModal({ onClose, title, children }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto ecc-scrollbar rounded-2xl p-6" style={{ background: "#fff" }} onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>{title}</p>
+          <button onClick={onClose}><X size={18} color={C.charcoal} /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function DocumentsPage({ selectedBundle, actions }) {
   const quote = selectedBundle.primaryQuote;
   const contract = selectedBundle.primaryContract;
   const invoice = selectedBundle.primaryInvoice;
+  const [preview, setPreview] = useState(null); // 'quote' | 'contract' | 'invoice'
 
   return (
     <div className="space-y-4">
@@ -277,6 +337,7 @@ function DocumentsPage({ selectedBundle, actions }) {
         body={quote ? `${formatCurrency(quote.total)} • ${selectedBundle.client.sessionType}` : "No quote has been prepared yet."}
         status={quote?.status || "pending"}
         actions={[
+          quote ? { label: "View", onClick: () => setPreview("quote") } : null,
           quote && quote.status !== "accepted" ? { label: "Accept quote", onClick: () => actions.acceptQuote(quote.id) } : null,
           quote && quote.status === "draft" ? { label: "Mark viewed", onClick: () => actions.viewQuote(quote.id) } : null,
         ]}
@@ -285,14 +346,80 @@ function DocumentsPage({ selectedBundle, actions }) {
         title={contract?.number || "Contract"}
         body={contract ? `${contract.templateName} for ${selectedBundle.client.name}` : "Your contract will appear here after your quote is accepted."}
         status={contract?.status || "pending"}
-        actions={[contract && contract.status !== "signed" ? { label: "Sign contract", onClick: () => actions.signContract(contract.id) } : null]}
+        actions={[
+          contract ? { label: "View", onClick: () => setPreview("contract") } : null,
+          contract && contract.status !== "signed" ? { label: "Sign contract", onClick: () => actions.signContract(contract.id) } : null,
+        ]}
       />
       <ActionDocument
         title={invoice?.number || "Invoice"}
         body={invoice ? `${formatCurrency(invoice.total)} total • ${formatCurrency(invoice.balanceDue)} remaining` : "Your invoice will appear here once your booking is ready for payment."}
         status={invoice?.status || "pending"}
-        actions={[invoice && invoice.balanceDue > 0 ? { label: `Pay ${formatCurrency(invoice.balanceDue)}`, onClick: () => actions.recordPayment(invoice.id, invoice.balanceDue, "Portal") } : null]}
+        actions={[
+          invoice ? { label: "View", onClick: () => setPreview("invoice") } : null,
+          invoice && invoice.balanceDue > 0 ? { label: `Pay ${formatCurrency(invoice.balanceDue)}`, onClick: () => actions.recordPayment(invoice.id, invoice.balanceDue, "Portal") } : null,
+        ]}
       />
+
+      {preview === "quote" && quote && (
+        <ClientModal onClose={() => setPreview(null)} title={`Quote ${quote.number} — read-only`}>
+          <p className="ecc-display text-3xl mt-2" style={{ color: C.ink }}>{formatCurrency(quote.total)}</p>
+          <p className="text-sm mt-1" style={{ color: C.charcoal }}>{selectedBundle.client.sessionType}</p>
+          <div className="mt-5 space-y-3">
+            {quote.lineItems.map((item) => (
+              <div key={item.id} className="flex items-start justify-between gap-3 pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+                <div>
+                  <p className="text-sm font-medium" style={{ color: C.ink }}>{item.name}</p>
+                  <RichText text={item.description} className="text-xs mt-1" style={{ color: C.charcoal }} />
+                </div>
+                <p className="text-sm shrink-0" style={{ color: C.ink }}>{formatCurrency(item.quantity * item.unitPrice)}</p>
+              </div>
+            ))}
+          </div>
+          {quote.status === "accepted" && <p className="text-xs mt-4" style={{ color: C.taupe }}>Accepted — this quote is locked and can't be edited.</p>}
+        </ClientModal>
+      )}
+
+      {preview === "contract" && contract && (
+        <ClientModal onClose={() => setPreview(null)} title={`Contract ${contract.number} — read-only`}>
+          <p className="ecc-display text-2xl mt-2" style={{ color: C.ink }}>{contract.templateName}</p>
+          <div className="mt-5 space-y-4">
+            {(contract.clauses || []).map((clause) => (
+              <div key={clause.id}>
+                <p className="text-sm font-medium mb-1" style={{ color: C.ink }}>{clause.title}</p>
+                <p className="text-sm leading-6" style={{ color: C.charcoal }}>{clause.body}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
+            <p className="text-xs" style={{ color: C.taupe }}>
+              {contract.status === "signed" ? `Signed by ${contract.signerName} on ${contract.signedAt}` : "Not yet signed."}
+            </p>
+          </div>
+        </ClientModal>
+      )}
+
+      {preview === "invoice" && invoice && (
+        <ClientModal onClose={() => setPreview(null)} title={`Invoice ${invoice.number} — read-only`}>
+          <p className="ecc-display text-3xl mt-2" style={{ color: C.ink }}>{formatCurrency(invoice.total)}</p>
+          <p className="text-sm mt-1" style={{ color: C.charcoal }}>{invoice.kind} invoice</p>
+          <div className="mt-5 space-y-3">
+            {invoice.lineItems.map((item) => (
+              <div key={item.id} className="flex items-start justify-between gap-3 pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+                <div>
+                  <p className="text-sm font-medium" style={{ color: C.ink }}>{item.name}</p>
+                  <RichText text={item.description} className="text-xs mt-1" style={{ color: C.charcoal }} />
+                </div>
+                <p className="text-sm shrink-0" style={{ color: C.ink }}>{formatCurrency(item.quantity * item.unitPrice)}</p>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-1.5 mt-5 text-sm">
+            <div className="flex justify-between"><span style={{ color: C.taupe }}>Paid</span><span style={{ color: C.ink }}>{formatCurrency(invoice.amountPaid)}</span></div>
+            <div className="flex justify-between font-medium"><span style={{ color: C.taupe }}>Balance due</span><span style={{ color: C.ink }}>{formatCurrency(invoice.balanceDue)}</span></div>
+          </div>
+        </ClientModal>
+      )}
     </div>
   );
 }
@@ -304,13 +431,24 @@ function DetailsPage({ selectedBundle }) {
   }
   const session = selectedBundle.session;
   const portal = selectedBundle.portal;
+  const address = portal?.customLocation || "Dallas, TX";
+  const mapsUrl = `https://maps.apple.com/?q=${encodeURIComponent(address)}`;
   return (
     <Card className="p-5">
       <p className="ecc-display text-3xl mb-4" style={{ color: C.ink }}>Session Details</p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <InfoCard label="Date" value={session?.sessionDate || portal?.customDate || "Awaiting selection"} />
         <InfoCard label="Time" value={session?.sessionTime || portal?.customTime || "Awaiting selection"} />
-        <InfoCard label="Location" value={portal?.customLocation || "Dallas, TX"} />
+        <a href={mapsUrl} target="_blank" rel="noreferrer" className="block">
+          <div className="rounded-2xl p-4 h-full" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Location</p>
+              <MapPin size={13} color={C.forest} />
+            </div>
+            <p className="text-sm mt-2 font-medium underline" style={{ color: C.forest }}>{address}</p>
+            <p className="text-[11px] mt-1" style={{ color: C.taupe }}>Tap to open in Maps</p>
+          </div>
+        </a>
       </div>
       <div className="mt-5 rounded-2xl p-4" style={{ background: C.bg }}>
         <p className="text-sm leading-7" style={{ color: C.ink }}>{portal?.sessionNotes}</p>
@@ -433,7 +571,7 @@ function PlanPage({ selectedBundle }) {
 function GalleryPage({ selectedBundle }) {
   const session = selectedBundle.session;
   const delivered = session?.galleryStatus === "delivered";
-  const images = selectedBundle.portal?.galleryImages || [];
+  const galleryLink = selectedBundle.portal?.galleryLink;
 
   if (!delivered) {
     return (
@@ -444,27 +582,41 @@ function GalleryPage({ selectedBundle }) {
     );
   }
 
+  if (!galleryLink?.url) {
+    return (
+      <div className="space-y-4">
+        <p className="ecc-display text-3xl" style={{ color: C.ink }}>Your Gallery</p>
+        <Card className="p-10 text-center">
+          <ImageIcon size={24} color={C.taupe} className="mx-auto mb-3" />
+          <p className="text-sm" style={{ color: C.charcoal }}>Marked delivered, but the gallery link hasn't been added yet — check back soon.</p>
+        </Card>
+      </div>
+    );
+  }
+
+  let domain = "";
+  try { domain = new URL(galleryLink.url).hostname.replace("www.", ""); } catch { domain = galleryLink.url; }
+
   return (
     <div className="space-y-4">
       <p className="ecc-display text-3xl" style={{ color: C.ink }}>Your Gallery</p>
-      {images.length === 0 ? (
-        <Card className="p-10 text-center">
-          <ImageIcon size={24} color={C.taupe} className="mx-auto mb-3" />
-          <p className="text-sm" style={{ color: C.charcoal }}>Marked delivered, but no images uploaded yet — check back soon.</p>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {images.map((image) => (
-            <div key={image.id} className="aspect-square rounded-xl overflow-hidden">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={image.url} alt="" className="w-full h-full object-cover" />
-            </div>
-          ))}
+      <a href={galleryLink.url} target="_blank" rel="noreferrer" className="block rounded-2xl overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
+        <div className="aspect-[16/9] flex items-center justify-center" style={{ background: galleryLink.previewImage ? "transparent" : C.bg }}>
+          {galleryLink.previewImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={galleryLink.previewImage} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <ImageIcon size={32} color={C.taupe} />
+          )}
         </div>
-      )}
-      <button className="w-full py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>
-        Download Full Gallery
-      </button>
+        <div className="p-4" style={{ background: "#fff" }}>
+          <p className="text-sm font-medium" style={{ color: C.ink }}>{galleryLink.title || "Your Gallery"}</p>
+          <p className="text-xs mt-0.5" style={{ color: C.taupe }}>{domain}</p>
+        </div>
+      </a>
+      <a href={galleryLink.url} target="_blank" rel="noreferrer" className="w-full block text-center py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>
+        Open Gallery
+      </a>
     </div>
   );
 }
@@ -507,6 +659,8 @@ function MessagesPage({ selectedBundle, actions }) {
 }
 
 function PaymentsPage({ selectedBundle, actions }) {
+  const [payingInvoice, setPayingInvoice] = useState(null);
+
   return (
     <div className="space-y-4">
       {selectedBundle.invoices.length === 0 && <LockedCard body="Payments will appear here once your booking invoice is ready." />}
@@ -515,7 +669,7 @@ function PaymentsPage({ selectedBundle, actions }) {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="ecc-display text-3xl" style={{ color: C.ink }}>{invoice.number}</p>
-              <p className="text-sm mt-1" style={{ color: C.charcoal }}>{invoice.kind} invoice</p>
+              <p className="text-sm mt-1" style={{ color: C.charcoal }}>{invoice.kind} invoice{invoice.dueDate ? ` • due ${invoice.dueDate}` : ""}</p>
             </div>
             <Pill tone={invoice.status === "paid" ? "done" : invoice.status === "sent" || invoice.status === "partially_paid" ? "info" : "neutral"}>
               {invoice.status}
@@ -527,13 +681,54 @@ function PaymentsPage({ selectedBundle, actions }) {
             <InfoCard label="Balance due" value={formatCurrency(invoice.balanceDue)} />
           </div>
           {invoice.balanceDue > 0 && (
-            <button onClick={() => actions.recordPayment(invoice.id, invoice.balanceDue, "Portal")} className="mt-4 px-4 py-3 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>
-              Pay remaining balance
+            <button onClick={() => setPayingInvoice(invoice)} className="mt-4 px-4 py-3 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>
+              Pay Now — {formatCurrency(invoice.balanceDue)}
             </button>
           )}
         </Card>
       ))}
+
+      {payingInvoice && (
+        <PayNowModal
+          invoice={payingInvoice}
+          onClose={() => setPayingInvoice(null)}
+          onConfirm={(method) => { actions.recordPayment(payingInvoice.id, payingInvoice.balanceDue, method); setPayingInvoice(null); }}
+        />
+      )}
     </div>
+  );
+}
+
+function PayNowModal({ invoice, onClose, onConfirm }) {
+  const [method, setMethod] = useState("card");
+  return (
+    <ClientModal onClose={onClose} title={`Pay ${invoice.number}`}>
+      <p className="ecc-display text-4xl mt-2" style={{ color: C.ink }}>{formatCurrency(invoice.balanceDue)}</p>
+      <p className="text-sm mt-1 mb-5" style={{ color: C.charcoal }}>Balance due on {invoice.number}</p>
+
+      <div className="space-y-2 mb-5">
+        <button onClick={() => setMethod("card")} className="w-full flex items-center justify-between p-3 rounded-xl text-left" style={{ border: `1px solid ${method === "card" ? C.forest : C.line}`, background: method === "card" ? C.bg : "#fff" }}>
+          <span className="flex items-center gap-2 text-sm" style={{ color: C.ink }}><CreditCard size={16} color={C.taupe} /> Card via Stripe</span>
+          {method === "card" && <Check size={14} color={C.forest} />}
+        </button>
+        <button onClick={() => setMethod("zelle")} className="w-full flex items-center justify-between p-3 rounded-xl text-left" style={{ border: `1px solid ${method === "zelle" ? C.forest : C.line}`, background: method === "zelle" ? C.bg : "#fff" }}>
+          <span className="flex items-center gap-2 text-sm" style={{ color: C.ink }}><Send size={16} color={C.taupe} /> Zelle</span>
+          {method === "zelle" && <Check size={14} color={C.forest} />}
+        </button>
+      </div>
+
+      {method === "zelle" ? (
+        <div className="rounded-xl p-4 mb-4" style={{ background: C.bg }}>
+          <p className="text-sm" style={{ color: C.ink }}>Send {formatCurrency(invoice.balanceDue)} to <strong>payments@eccreativestudios.com</strong>, then confirm below once sent.</p>
+        </div>
+      ) : (
+        <p className="text-xs mb-4" style={{ color: C.taupe }}>This demo doesn't process a real card — confirming marks the invoice paid the same way a completed Stripe checkout would.</p>
+      )}
+
+      <button onClick={() => onConfirm(method === "card" ? "Card" : "Zelle")} className="w-full py-3 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>
+        {method === "card" ? "Continue to secure checkout" : "I've sent the Zelle payment"}
+      </button>
+    </ClientModal>
   );
 }
 

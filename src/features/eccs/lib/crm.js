@@ -151,6 +151,36 @@ const baseAddons = [
     description: "Short-form BTS video capture",
     price: 300,
   },
+  {
+    id: "addon_studio",
+    name: "Studio Rental",
+    description: "Use of EC Creative Studios' indoor studio space",
+    price: 150,
+  },
+  {
+    id: "addon_extra_hour",
+    name: "Extra Hour",
+    description: "One additional hour of session time",
+    price: 200,
+  },
+  {
+    id: "addon_rush",
+    name: "Rush Delivery",
+    description: "Final gallery delivered within 72 hours",
+    price: 175,
+  },
+  {
+    id: "addon_travel",
+    name: "Travel Fee",
+    description: "Travel beyond a 20-mile radius of Dallas–Fort Worth",
+    price: 100,
+  },
+  {
+    id: "addon_album",
+    name: "Album Credit",
+    description: "Credit toward a printed heirloom album",
+    price: 350,
+  },
 ];
 
 export function createInitialState() {
@@ -251,6 +281,12 @@ export function createInitialState() {
 
   return {
     selectedClientId: clientSarahId,
+    availability: [
+      { date: "Jul 18, 2026", times: ["9:00 AM", "1:00 PM"] },
+      { date: "Jul 20, 2026", times: ["10:00 AM", "4:30 PM"] },
+      { date: "Jul 22, 2026", times: ["10:00 AM", "2:00 PM"] },
+    ],
+    scheduledEmails: [],
     studioSettings: { heroImageUrl: "", heroHeadline: "Admin first. Booking rules before everything else." },
     packages: basePackages,
     addons: baseAddons,
@@ -472,6 +508,7 @@ export function createInitialState() {
         propList: ["Flowing cream dress", "Draped gauze", "Wood stool", "Floral stem bundle"],
         visionImages: [],
         galleryImages: [],
+        galleryLink: { url: "", title: "", previewImage: "" },
       },
       {
         clientId: clientAshleyId,
@@ -484,6 +521,7 @@ export function createInitialState() {
         propList: ["Cream swaddle", "Bassinet", "Rattan stool"],
         visionImages: [],
         galleryImages: [],
+        galleryLink: { url: "", title: "", previewImage: "" },
       },
       {
         clientId: clientThomasId,
@@ -496,6 +534,7 @@ export function createInitialState() {
         propList: ["Getting-ready flat lay kit", "Champagne coupe"],
         visionImages: [],
         galleryImages: [],
+        galleryLink: { url: "", title: "", previewImage: "" },
       },
     ],
     messages: [
@@ -578,6 +617,7 @@ export function getClientBundle(state, clientId) {
   const notes = state.notes.filter((entry) => entry.clientId === clientId);
   const activity = state.activity.filter((entry) => entry.clientId === clientId);
   const emailLogs = (state.emailLogs || []).filter((entry) => entry.clientId === clientId);
+  const scheduledEmails = (state.scheduledEmails || []).filter((entry) => entry.clientId === clientId);
   const stage = derivePipelineStage({ client, inquiry, quotes, contracts, invoices, session });
   const booking = deriveBookingState({ inquiry, quotes, contracts, invoices, session });
   const projectStatus = deriveProjectStatus(session, booking, emailLogs);
@@ -595,6 +635,7 @@ export function getClientBundle(state, clientId) {
     notes,
     activity,
     emailLogs,
+    scheduledEmails,
     stage,
     booking,
     projectStatus,
@@ -748,6 +789,7 @@ export function crmReducer(state, action) {
             propList: [],
             visionImages: [],
             galleryImages: [],
+            galleryLink: { url: "", title: "", previewImage: "" },
           },
           ...state.portalProfiles,
         ];
@@ -1598,6 +1640,81 @@ export function crmReducer(state, action) {
             : entry,
         ),
       };
+    }
+
+    case "set_availability": {
+      const existing = state.availability.find((entry) => entry.date === action.date);
+      const times = Array.from(new Set(action.times)).sort();
+      const nextAvailability = existing
+        ? state.availability.map((entry) => (entry.date === action.date ? { ...entry, times } : entry))
+        : [...state.availability, { date: action.date, times }];
+      return { ...state, availability: nextAvailability.filter((entry) => entry.times.length > 0) };
+    }
+
+    case "add_availability_slot": {
+      const existing = state.availability.find((entry) => entry.date === action.date);
+      if (existing) {
+        if (existing.times.includes(action.time)) return state;
+        return {
+          ...state,
+          availability: state.availability.map((entry) =>
+            entry.date === action.date ? { ...entry, times: [...entry.times, action.time].sort() } : entry,
+          ),
+        };
+      }
+      return { ...state, availability: [...state.availability, { date: action.date, times: [action.time] }] };
+    }
+
+    case "remove_availability_slot": {
+      return {
+        ...state,
+        availability: state.availability
+          .map((entry) => (entry.date === action.date ? { ...entry, times: entry.times.filter((time) => time !== action.time) } : entry))
+          .filter((entry) => entry.times.length > 0),
+      };
+    }
+
+    case "schedule_email": {
+      const entry = {
+        id: nextId("sched"),
+        clientId: action.clientId,
+        subject: action.subject,
+        body: action.body,
+        sendAt: action.sendAt,
+        createdAt: dayStamp(),
+      };
+      return withActivity(
+        { ...state, scheduledEmails: [entry, ...state.scheduledEmails] },
+        getClientBundle(state, action.clientId).client?.name || "Client",
+        `Email scheduled for ${action.sendAt}: "${action.subject}".`,
+      );
+    }
+
+    case "send_scheduled_email_now": {
+      const entry = state.scheduledEmails.find((item) => item.id === action.id);
+      if (!entry) return state;
+      return withActivity(
+        { ...state, scheduledEmails: state.scheduledEmails.filter((item) => item.id !== action.id) },
+        getClientBundle(state, entry.clientId).client?.name || "Client",
+        `Scheduled email sent now: "${entry.subject}".`,
+      );
+    }
+
+    case "cancel_scheduled_email": {
+      return { ...state, scheduledEmails: state.scheduledEmails.filter((item) => item.id !== action.id) };
+    }
+
+    case "add_addon": {
+      const addon = { id: nextId("addon"), name: action.name || "New Add-On", description: action.description || "", price: action.price || 0 };
+      return { ...state, addons: [...state.addons, addon] };
+    }
+
+    case "update_addon": {
+      return { ...state, addons: state.addons.map((entry) => (entry.id === action.addonId ? { ...entry, ...action.patch } : entry)) };
+    }
+
+    case "remove_addon": {
+      return { ...state, addons: state.addons.filter((entry) => entry.id !== action.addonId) };
     }
 
     default:
