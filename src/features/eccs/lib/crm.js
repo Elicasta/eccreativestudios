@@ -1,20 +1,36 @@
 const money = (value) => Number((value || 0).toFixed(2));
 
-const sumLineItems = (lineItems = []) =>
+const sumLineItems = (lineItems = [], { includeOptional = false } = {}) =>
   money(
     lineItems.reduce((total, item) => {
+      const optional = Boolean(item.optional);
+      const selected = Boolean(item.selected);
+      if (optional && !includeOptional && !selected) return total;
       const quantity = Number(item.quantity || 0);
       const unitPrice = Number(item.unitPrice || 0);
       return total + quantity * unitPrice;
     }, 0),
   );
 
+const selectedGroupOptions = (optionGroups = []) =>
+  optionGroups.flatMap((group) => {
+    const selected = new Set(group.selectedOptionIds || []);
+    return (group.options || [])
+      .filter((option) => selected.has(option.id))
+      .map((option) => ({ ...option, groupId: group.id, groupTitle: group.title }));
+  });
+
+const sumOptionGroups = (optionGroups = []) => sumLineItems(selectedGroupOptions(optionGroups), { includeOptional: true });
+
 const recalcQuote = (quote) => {
-  const subtotal = sumLineItems(quote.lineItems);
+  const lineItems = quote.lineItems || [];
+  const optionGroups = quote.optionGroups || [];
+  const subtotal = money(sumLineItems(lineItems) + sumOptionGroups(optionGroups));
+  const optionalTotal = money(sumLineItems(lineItems, { includeOptional: true }) - sumLineItems(lineItems));
   const discount = money(Number(quote.discount || 0));
   const tax = money(Number(quote.tax || 0));
   const total = money(Math.max(0, subtotal - discount + tax));
-  return { ...quote, subtotal, discount, tax, total };
+  return { ...quote, lineItems, optionGroups, subtotal, optionalTotal, discount, tax, total };
 };
 
 const recalcInvoice = (invoice) => {
@@ -47,10 +63,10 @@ const nextId = (prefix) => `${prefix}_${Math.random().toString(36).slice(2, 10)}
 const buildQuoteItems = (pkg, addons = []) => [
   {
     id: nextId("qi"),
-    name: pkg.name,
-    description: pkg.description,
+    name: pkg?.name || "Session package",
+    description: pkg?.description || "Photography session package.",
     quantity: 1,
-    unitPrice: pkg.price,
+    unitPrice: pkg?.price || 0,
   },
   ...addons.map((addon) => ({
     id: nextId("qi"),
@@ -58,8 +74,31 @@ const buildQuoteItems = (pkg, addons = []) => [
     description: addon.description,
     quantity: 1,
     unitPrice: addon.price,
+    optional: Boolean(addon.optional),
+    selected: Boolean(addon.selected),
   })),
 ];
+
+const buildPackageOptionGroup = (packages = [], selectedPackageId) => {
+  const options = packages.map((pkg) => ({
+    id: nextId("qopt"),
+    packageId: pkg.id,
+    name: pkg.name,
+    description: pkg.description,
+    quantity: 1,
+    unitPrice: pkg.price,
+  }));
+  const selected = options.find((option) => option.packageId === selectedPackageId) || options[0];
+  return {
+    id: nextId("qgrp"),
+    title: "Choose your photography experience",
+    description: "Client must choose one package before accepting the quote.",
+    selectionMode: "single",
+    required: true,
+    selectedOptionIds: selected ? [selected.id] : [],
+    options,
+  };
+};
 
 const buildInvoiceItems = (label, amount) => [
   {
@@ -287,6 +326,16 @@ export function createInitialState() {
       { date: "Jul 22, 2026", times: ["10:00 AM", "2:00 PM"] },
     ],
     scheduledEmails: [],
+    marketingCampaigns: [
+      { id: "camp_fall_minis", name: "Fall Mini-Sessions Promo", segment: "All clients", status: "Sent", stats: "41% open · 9% click", createdAt: "Jun 1, 2026" },
+      { id: "camp_welcome", name: "Welcome Series — New Inquiry", segment: "All inquiries", status: "Automated", stats: "Triggers on inquiry approval", createdAt: "Jan 5, 2026" },
+      { id: "camp_reengage", name: "Past Client Re-Engagement", segment: "Returning inquiry", status: "Draft", stats: "—", createdAt: "Mar 3, 2026" },
+    ],
+    socialRules: [
+      { id: "rule_minis", keyword: "MINIS", reply: "Mini-session info + booking link", count: 38 },
+      { id: "rule_maternity", keyword: "MATERNITY", reply: "Maternity package PDF + inquiry link", count: 21 },
+      { id: "rule_book", keyword: "BOOK", reply: "Direct link to the inquiry form", count: 64 },
+    ],
     studioSettings: { heroImageUrl: "", heroHeadline: "Admin first. Booking rules before everything else." },
     packages: basePackages,
     addons: baseAddons,
@@ -815,7 +864,7 @@ export function crmReducer(state, action) {
       const bundle = getClientBundle(state, action.clientId);
       if (!bundle.client) return state;
       const existing = bundle.quotes.find((entry) => activeQuoteStatuses.includes(entry.status));
-      if (existing) {
+      if (existing && !action.force) {
         return { ...state, selectedClientId: action.clientId };
       }
       const pkg = state.packages.find((entry) => entry.id === bundle.client.packageId) || state.packages[0];
@@ -828,7 +877,8 @@ export function crmReducer(state, action) {
         sessionDate: bundle.inquiry?.desiredDate || "",
         location: bundle.client.city || "",
         status: "draft",
-        lineItems: buildQuoteItems(pkg),
+        lineItems: [],
+        optionGroups: [buildPackageOptionGroup(state.packages, bundle.client.packageId)],
         discount: 0,
         tax: 0,
         notes: "Drafted inside EC Creative Studios CRM.",
@@ -919,6 +969,138 @@ export function crmReducer(state, action) {
             ? recalcQuote({
                 ...entry,
                 lineItems: entry.lineItems.filter((item) => item.id !== action.itemId),
+              })
+            : entry,
+        ),
+      };
+    }
+
+    case "add_quote_package_group": {
+      return {
+        ...state,
+        quotes: state.quotes.map((entry) =>
+          entry.id === action.quoteId
+            ? recalcQuote({
+                ...entry,
+                optionGroups: [
+                  ...(entry.optionGroups || []),
+                  buildPackageOptionGroup(state.packages, action.selectedPackageId),
+                ],
+              })
+            : entry,
+        ),
+      };
+    }
+
+    case "patch_quote_option_group": {
+      return {
+        ...state,
+        quotes: state.quotes.map((entry) =>
+          entry.id === action.quoteId
+            ? recalcQuote({
+                ...entry,
+                optionGroups: (entry.optionGroups || []).map((group) =>
+                  group.id === action.groupId ? { ...group, ...action.patch } : group,
+                ),
+              })
+            : entry,
+        ),
+      };
+    }
+
+    case "remove_quote_option_group": {
+      return {
+        ...state,
+        quotes: state.quotes.map((entry) =>
+          entry.id === action.quoteId
+            ? recalcQuote({ ...entry, optionGroups: (entry.optionGroups || []).filter((group) => group.id !== action.groupId) })
+            : entry,
+        ),
+      };
+    }
+
+    case "add_quote_option": {
+      return {
+        ...state,
+        quotes: state.quotes.map((entry) =>
+          entry.id === action.quoteId
+            ? recalcQuote({
+                ...entry,
+                optionGroups: (entry.optionGroups || []).map((group) =>
+                  group.id === action.groupId
+                    ? {
+                        ...group,
+                        options: [
+                          ...(group.options || []),
+                          { id: nextId("qopt"), name: "New package option", description: "", quantity: 1, unitPrice: 0 },
+                        ],
+                      }
+                    : group,
+                ),
+              })
+            : entry,
+        ),
+      };
+    }
+
+    case "patch_quote_option": {
+      return {
+        ...state,
+        quotes: state.quotes.map((entry) =>
+          entry.id === action.quoteId
+            ? recalcQuote({
+                ...entry,
+                optionGroups: (entry.optionGroups || []).map((group) =>
+                  group.id === action.groupId
+                    ? {
+                        ...group,
+                        options: (group.options || []).map((option) =>
+                          option.id === action.optionId ? { ...option, ...action.patch } : option,
+                        ),
+                      }
+                    : group,
+                ),
+              })
+            : entry,
+        ),
+      };
+    }
+
+    case "remove_quote_option": {
+      return {
+        ...state,
+        quotes: state.quotes.map((entry) =>
+          entry.id === action.quoteId
+            ? recalcQuote({
+                ...entry,
+                optionGroups: (entry.optionGroups || []).map((group) => ({
+                  ...group,
+                  selectedOptionIds: (group.selectedOptionIds || []).filter((id) => id !== action.optionId),
+                  options: (group.options || []).filter((option) => option.id !== action.optionId),
+                })),
+              })
+            : entry,
+        ),
+      };
+    }
+
+    case "select_quote_option": {
+      return {
+        ...state,
+        quotes: state.quotes.map((entry) =>
+          entry.id === action.quoteId
+            ? recalcQuote({
+                ...entry,
+                optionGroups: (entry.optionGroups || []).map((group) => {
+                  if (group.id !== action.groupId) return group;
+                  if (group.selectionMode === "multiple") {
+                    const selected = new Set(group.selectedOptionIds || []);
+                    if (action.selected) selected.add(action.optionId);
+                    else selected.delete(action.optionId);
+                    return { ...group, selectedOptionIds: Array.from(selected) };
+                  }
+                  return { ...group, selectedOptionIds: [action.optionId] };
+                }),
               })
             : entry,
         ),
@@ -1373,7 +1555,8 @@ export function crmReducer(state, action) {
             sessionDate: bundle.inquiry?.desiredDate || "",
             location: bundle.client.city || "",
             status: "draft",
-            lineItems: buildQuoteItems(pkg),
+            lineItems: [],
+            optionGroups: [buildPackageOptionGroup(working.packages, bundle.client.packageId)],
             discount: 0,
             tax: 0,
             notes: "Drafted via Manual Override.",
@@ -1717,9 +1900,235 @@ export function crmReducer(state, action) {
       return { ...state, addons: state.addons.filter((entry) => entry.id !== action.addonId) };
     }
 
+    case "create_client": {
+      const clientId = nextId("client");
+      const inquiryId = nextId("inq");
+      const name = action.name?.trim() || "New Client";
+      const sessionType = action.sessionType?.trim() || "Portrait Session";
+      const inquiry = {
+        id: inquiryId,
+        clientId,
+        name,
+        email: action.email || "",
+        phone: action.phone || "",
+        sessionType,
+        budgetRange: action.budgetRange || "",
+        desiredDate: action.desiredDate || "",
+        location: action.location || "Miami, FL",
+        notes: action.notes || "Created from quick add.",
+        status: "approved",
+        receivedAt: dayStamp(),
+      };
+      const client = {
+        id: clientId,
+        inquiryId,
+        name,
+        email: action.email || "",
+        phone: action.phone || "",
+        sessionType,
+        packageId: state.packages[0]?.id || null,
+        status: "active",
+        city: action.location || "Miami, FL",
+        preferredLocationId: state.locations[0]?.id || null,
+        tags: action.tags || ["Quick add"],
+      };
+      const session = {
+        id: nextId("session"),
+        clientId,
+        quoteId: null,
+        contractId: null,
+        invoiceIds: [],
+        sessionType,
+        status: "planning",
+        sessionDate: action.desiredDate || "",
+        sessionTime: "",
+        locationId: state.locations[0]?.id || null,
+        prepStatus: "not_started",
+        galleryStatus: "not_ready",
+        projectCreatedAt: "",
+        portalAccessSentAt: "",
+        availabilityEmailSentAt: "",
+        calendarInviteSentAt: "",
+        notes: "Client created from quick add.",
+      };
+      const portal = {
+        clientId,
+        useProjectDetails: true,
+        customDate: "",
+        customTime: "",
+        customLocation: "",
+        sessionVision: "",
+        sessionNotes: "",
+        propList: [],
+        visionImages: [],
+        galleryImages: [],
+        galleryLink: { url: "", title: "", previewImage: "" },
+      };
+      return withActivity(
+        {
+          ...state,
+          selectedClientId: clientId,
+          inquiries: [inquiry, ...state.inquiries],
+          clients: [client, ...state.clients],
+          sessions: [session, ...state.sessions],
+          portalProfiles: [portal, ...state.portalProfiles],
+        },
+        name,
+        "Client record created from the quick-add button.",
+      );
+    }
+
+    case "create_inquiry": {
+      const inquiry = {
+        id: nextId("inq"),
+        clientId: null,
+        name: action.name?.trim() || "New Inquiry",
+        email: action.email || "",
+        phone: action.phone || "",
+        sessionType: action.sessionType || "Portrait Session",
+        budgetRange: action.budgetRange || "",
+        desiredDate: action.desiredDate || "",
+        location: action.location || "Miami, FL",
+        notes: action.notes || "Created from quick add.",
+        status: "new",
+        receivedAt: dayStamp(),
+      };
+      return { ...state, inquiries: [inquiry, ...state.inquiries] };
+    }
+
+    case "log_email": {
+      const client = state.clients.find((entry) => entry.id === action.clientId);
+      if (!client) return state;
+      return withActivity(
+        {
+          ...state,
+          emailLogs: [
+            {
+              id: nextId("email"),
+              clientId: action.clientId,
+              kind: action.kind || "manual",
+              subject: action.subject || "Manual email",
+              sentAt: dayStamp(),
+            },
+            ...(state.emailLogs || []),
+          ],
+        },
+        client.name,
+        `Manual email logged: "${action.subject || "Manual email"}".`,
+      );
+    }
+
+    case "add_marketing_campaign": {
+      const campaign = {
+        id: nextId("camp"),
+        name: action.name || "New Campaign",
+        segment: action.segment || "All clients",
+        status: "Draft",
+        stats: "—",
+        createdAt: dayStamp(),
+      };
+      return { ...state, marketingCampaigns: [campaign, ...(state.marketingCampaigns || [])] };
+    }
+
+    case "add_social_rule": {
+      const rule = {
+        id: nextId("rule"),
+        keyword: (action.keyword || "KEYWORD").toUpperCase(),
+        reply: action.reply || "Reply with booking link",
+        count: 0,
+      };
+      return { ...state, socialRules: [rule, ...(state.socialRules || [])] };
+    }
+
+    case "refund_payment": {
+      const payment = state.payments.find((entry) => entry.id === action.paymentId);
+      if (!payment || payment.status === "refunded" || payment.amount <= 0) return state;
+      const invoice = state.invoices.find((entry) => entry.id === payment.invoiceId);
+      if (!invoice) return state;
+      const amount = money(Number(action.amount || payment.amount));
+      const nextPayments = state.payments.map((entry) =>
+        entry.id === action.paymentId ? { ...entry, status: "refunded", refundedAt: dayStamp(), refundNote: action.note || "Refunded" } : entry,
+      );
+      const refund = {
+        id: nextId("payment"),
+        clientId: payment.clientId,
+        invoiceId: payment.invoiceId,
+        amount: -amount,
+        method: payment.method,
+        paidAt: dayStamp(),
+        note: action.note || `Refund for ${formatCurrency(amount)}`,
+        type: "refund",
+        linkedPaymentId: payment.id,
+      };
+      const nextState = rebalanceInvoiceAfterPaymentChange({ ...state, payments: [refund, ...nextPayments] }, invoice.id, -amount);
+      return withActivity(
+        nextState,
+        getClientBundle(state, payment.clientId).client?.name || "Client",
+        `Refunded ${formatCurrency(amount)} from ${invoice.number}.`,
+      );
+    }
+
+    case "delete_payment": {
+      const payment = state.payments.find((entry) => entry.id === action.paymentId);
+      if (!payment) return state;
+      const invoice = state.invoices.find((entry) => entry.id === payment.invoiceId);
+      const nextState = rebalanceInvoiceAfterPaymentChange(
+        { ...state, payments: state.payments.filter((entry) => entry.id !== action.paymentId && entry.linkedPaymentId !== action.paymentId) },
+        payment.invoiceId,
+        -payment.amount,
+      );
+      return withActivity(
+        nextState,
+        getClientBundle(state, payment.clientId).client?.name || "Client",
+        `Deleted ${formatCurrency(payment.amount)} payment${invoice ? ` from ${invoice.number}` : ""}.`,
+      );
+    }
+
     default:
       return state;
   }
+}
+
+function invoiceStatusAfterAmount(invoice) {
+  if (invoice.balanceDue <= 0 && invoice.total > 0) return "paid";
+  if (invoice.amountPaid > 0) return "partially_paid";
+  if (invoice.sentAt) return "sent";
+  return "draft";
+}
+
+function removeProjectIfPaymentGateBreaks(state, clientId) {
+  const bundle = getClientBundle(state, clientId);
+  if (bundle.booking.isBooked) return state;
+  return {
+    ...state,
+    sessions: state.sessions.map((entry) =>
+      entry.clientId === clientId
+        ? {
+            ...entry,
+            status: entry.status === "completed" ? entry.status : "payment_pending",
+            prepStatus: entry.status === "completed" ? entry.prepStatus : "invoice_sent",
+            projectCreatedAt: "",
+          }
+        : entry,
+    ),
+  };
+}
+
+function rebalanceInvoiceAfterPaymentChange(state, invoiceId, deltaAmount) {
+  const invoice = state.invoices.find((entry) => entry.id === invoiceId);
+  if (!invoice) return state;
+  const nextAmountPaid = money(Math.max(0, Number(invoice.amountPaid || 0) + Number(deltaAmount || 0)));
+  const rebalanced = recalcInvoice({
+    ...invoice,
+    amountPaid: nextAmountPaid,
+    paidAt: nextAmountPaid >= invoice.total ? invoice.paidAt || dayStamp() : "",
+  });
+  const finalInvoice = { ...rebalanced, status: invoiceStatusAfterAmount(rebalanced) };
+  const nextState = {
+    ...state,
+    invoices: state.invoices.map((entry) => (entry.id === invoiceId ? finalInvoice : entry)),
+  };
+  return removeProjectIfPaymentGateBreaks(nextState, invoice.clientId);
 }
 
 function maybeCreateProjectForClient(state, clientId) {

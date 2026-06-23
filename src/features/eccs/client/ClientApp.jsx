@@ -310,6 +310,49 @@ const RichText = ({ text, className, style }) => (
   <div className={className} style={style} dangerouslySetInnerHTML={{ __html: renderRichText(text || "") }} />
 );
 
+function ClientQuoteOptionGroup({ quote, group, actions, locked }) {
+  const selected = new Set(group.selectedOptionIds || []);
+  return (
+    <div className="rounded-2xl p-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <p className="text-sm font-medium" style={{ color: C.ink }}>{group.title || "Choose your package"}</p>
+          {group.description && <p className="text-xs mt-1" style={{ color: C.charcoal }}>{group.description}</p>}
+        </div>
+        <Pill tone={group.required ? "warn" : "neutral"}>{group.selectionMode === "multiple" ? "choose options" : "choose one"}</Pill>
+      </div>
+      <div className="space-y-2">
+        {(group.options || []).map((option) => {
+          const isSelected = selected.has(option.id);
+          return (
+            <button
+              key={option.id}
+              disabled={locked}
+              onClick={() => actions.selectQuoteOption(quote.id, group.id, option.id, !isSelected)}
+              className="w-full text-left rounded-2xl p-3"
+              style={{ background: isSelected ? "#fff" : "rgba(255,255,255,0.55)", border: `1px solid ${isSelected ? C.forest : C.line}` }}
+            >
+              <div className="flex gap-3">
+                <span className="w-5 h-5 rounded-full mt-0.5 flex items-center justify-center shrink-0" style={{ border: `1px solid ${isSelected ? C.forest : C.taupe}`, background: isSelected ? C.forest : "#fff" }}>
+                  {isSelected && <Check size={12} color="#fff" />}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-medium" style={{ color: C.ink }}>{option.name}</p>
+                    <p className="text-sm shrink-0" style={{ color: C.ink }}>{formatCurrency((option.quantity || 1) * (option.unitPrice || 0))}</p>
+                  </div>
+                  <RichText text={option.description} className="text-xs mt-1" style={{ color: C.charcoal }} />
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {locked && <p className="text-xs mt-3" style={{ color: C.taupe }}>Accepted selections are locked.</p>}
+    </div>
+  );
+}
+
 function ClientModal({ onClose, title, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
@@ -366,13 +409,24 @@ function DocumentsPage({ selectedBundle, actions }) {
           <p className="ecc-display text-3xl mt-2" style={{ color: C.ink }}>{formatCurrency(quote.total)}</p>
           <p className="text-sm mt-1" style={{ color: C.charcoal }}>{selectedBundle.client.sessionType}</p>
           <div className="mt-5 space-y-3">
+            {(quote.optionGroups || []).map((group) => (
+              <ClientQuoteOptionGroup key={group.id} quote={quote} group={group} actions={actions} locked={quote.status === "accepted"} />
+            ))}
             {quote.lineItems.map((item) => (
               <div key={item.id} className="flex items-start justify-between gap-3 pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
                 <div>
-                  <p className="text-sm font-medium" style={{ color: C.ink }}>{item.name}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-medium" style={{ color: C.ink }}>{item.name}</p>
+                    {item.optional && <Pill tone={item.selected ? "done" : "neutral"}>{item.selected ? "selected" : "optional"}</Pill>}
+                  </div>
                   <RichText text={item.description} className="text-xs mt-1" style={{ color: C.charcoal }} />
+                  {item.optional && quote.status !== "accepted" && (
+                    <button onClick={() => actions.patchQuoteItem(quote.id, item.id, { selected: !item.selected })} className="text-xs mt-2 underline" style={{ color: C.forest }}>
+                      {item.selected ? "Remove from quote" : "Add to quote"}
+                    </button>
+                  )}
                 </div>
-                <p className="text-sm shrink-0" style={{ color: C.ink }}>{formatCurrency(item.quantity * item.unitPrice)}</p>
+                <p className="text-sm shrink-0" style={{ color: C.ink }}>{item.optional && !item.selected ? "+" : ""}{formatCurrency(item.quantity * item.unitPrice)}</p>
               </div>
             ))}
           </div>
@@ -606,7 +660,11 @@ function GalleryPage({ selectedBundle }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={galleryLink.previewImage} alt="" className="w-full h-full object-cover" />
           ) : (
-            <ImageIcon size={32} color={C.taupe} />
+            <div className="w-full h-full flex flex-col items-center justify-center text-center px-6" style={{ background: `linear-gradient(135deg, ${C.cream}, ${C.bg})` }}>
+              <ImageIcon size={32} color={C.taupe} />
+              <p className="ecc-display text-2xl mt-3" style={{ color: C.ink }}>{galleryLink.title || "Pixieset Gallery"}</p>
+              <p className="text-xs mt-1" style={{ color: C.taupe }}>Preview image not added yet. Link still opens normally.</p>
+            </div>
           )}
         </div>
         <div className="p-4" style={{ background: "#fff" }}>

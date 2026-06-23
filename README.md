@@ -68,3 +68,20 @@ Then open `http://localhost:3000`.
 2. Map the mock data to Supabase tables
 3. Wire Stripe into the invoice/payment actions
 4. Real Resend integration for Email Marketing and the milestone Emails page
+
+## v5 Notes
+
+This build adds real quote package choice groups, page-aware quick-create actions, searchable client switching, richer template modules, payment refund/delete logic, and a non-blank Pixieset gallery fallback card.
+
+Run:
+
+```bash
+npm install
+npm run dev
+```
+
+Production build validated with:
+
+```bash
+npm run build
+```

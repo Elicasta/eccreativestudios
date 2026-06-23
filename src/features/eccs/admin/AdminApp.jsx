@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   AlertTriangle,
   Bell,
@@ -99,6 +99,7 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
   const [page, setPage] = useState("dashboard");
   const [query, setQuery] = useState("");
   const [drawer, setDrawer] = useState(false);
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
 
   const filteredClients = useMemo(() => {
     const lower = query.trim().toLowerCase();
@@ -139,6 +140,9 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
           state={state}
           selectedBundle={selectedBundle}
           actions={actions}
+          page={page}
+          setPage={go}
+          onQuickCreate={() => setQuickCreateOpen(true)}
         />
         <div className="p-4 sm:p-6 lg:p-8 max-w-[1520px] mx-auto space-y-5">
           {page === "dashboard" && (
@@ -174,8 +178,8 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
           {page === "calendar" && <CalendarPage state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
           {page === "portal" && <PortalPage key={`portal-${state.selectedClientId}`} selectedBundle={selectedBundle} actions={actions} setApp={setApp} setPage={go} />}
           {page === "emails" && <EmailsPage selectedBundle={selectedBundle} actions={actions} setPage={go} />}
-          {page === "marketing" && <MarketingPage state={state} setPage={go} />}
-          {page === "social" && <SocialPage />}
+          {page === "marketing" && <MarketingPage state={state} actions={actions} setPage={go} />}
+          {page === "social" && <SocialPage state={state} actions={actions} />}
           {page === "forms" && <FormsPage />}
           {page === "templates" && <TemplatesPage />}
           {page === "workflows" && <PlaceholderPage title="Workflows" body="Automation rules (auto-send prep guide, auto-remind on unpaid invoice) live here in v2. This skeleton moves clients through the pipeline via real actions and Manual Override instead." />}
@@ -185,6 +189,17 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
           {page === "team" && <PlaceholderPage title="Team" body="Add Emily and any second shooters or editors with role-based access once auth exists." />}
         </div>
       </main>
+
+      {quickCreateOpen && (
+        <QuickCreateModal
+          page={page}
+          state={state}
+          selectedBundle={selectedBundle}
+          actions={actions}
+          setPage={go}
+          onClose={() => setQuickCreateOpen(false)}
+        />
+      )}
 
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex justify-around py-2" style={{ background: C.charcoal }}>
         {BOTTOM_NAV.map((item) => {
@@ -251,8 +266,14 @@ function Sidebar({ page, setPage, onClose }) {
   );
 }
 
-function Topbar({ query, setQuery, onMenu, title, state, selectedBundle, actions }) {
+function Topbar({ query, setQuery, onMenu, title, state, selectedBundle, actions, onQuickCreate }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [clientSearch, setClientSearch] = useState("");
+  const pickerClients = state.clients.filter((client) => {
+    const needle = clientSearch.trim().toLowerCase();
+    if (!needle) return true;
+    return [client.name, client.email, client.sessionType].some((value) => value?.toLowerCase().includes(needle));
+  });
   return (
     <div className="relative flex items-center gap-3 px-4 sm:px-6 py-4" style={{ borderBottom: `1px solid ${C.line}` }}>
       <button className="md:hidden" onClick={onMenu}><Menu size={20} color={C.ink} /></button>
@@ -285,16 +306,21 @@ function Topbar({ query, setQuery, onMenu, title, state, selectedBundle, actions
         <ChevronDown size={14} color={C.taupe} />
       </button>
 
-      <button className="w-10 h-10 rounded-full flex items-center justify-center text-white shrink-0" style={{ background: C.forest }}>
+      <button onClick={onQuickCreate} className="w-10 h-10 rounded-full flex items-center justify-center text-white shrink-0" style={{ background: C.forest }} title={`Quick add for ${title}`}>
         <Plus size={16} />
       </button>
 
       {pickerOpen && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setPickerOpen(false)} />
-          <div className="absolute right-4 sm:right-6 top-full mt-1 w-72 rounded-2xl shadow-lg z-40 max-h-80 overflow-y-auto ecc-scrollbar" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
-            <p className="text-[10px] uppercase tracking-[0.25em] px-4 pt-3 pb-2" style={{ color: C.taupe }}>Switch client — works from any page</p>
-            {state.clients.map((client) => (
+          <div className="absolute right-4 sm:right-6 top-full mt-1 w-80 rounded-2xl shadow-lg z-40 max-h-96 overflow-y-auto ecc-scrollbar" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+            <p className="text-[10px] uppercase tracking-[0.25em] px-4 pt-3 pb-2" style={{ color: C.taupe }}>Switch client</p>
+            <div className="mx-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-full" style={{ background: C.bg }}>
+              <Search size={14} color={C.taupe} />
+              <input value={clientSearch} onChange={(event) => setClientSearch(event.target.value)} placeholder="Search name, email, session..." className="bg-transparent outline-none text-sm w-full" style={{ color: C.ink }} />
+              {clientSearch && <button onClick={() => setClientSearch("")}><X size={13} color={C.taupe} /></button>}
+            </div>
+            {pickerClients.map((client) => (
               <button
                 key={client.id}
                 onClick={() => { actions.selectClient(client.id); setPickerOpen(false); }}
@@ -308,10 +334,236 @@ function Topbar({ query, setQuery, onMenu, title, state, selectedBundle, actions
                 </div>
               </button>
             ))}
+            {pickerClients.length === 0 && <p className="px-4 py-4 text-sm" style={{ color: C.taupe }}>No clients match that search.</p>}
           </div>
         </>
       )}
     </div>
+  );
+}
+
+const QUICK_CREATE_COPY = {
+  dashboard: { title: "Quick add", body: "Create a client, inquiry, quote, invoice, email, campaign, or social keyword from one place." },
+  clients: { title: "New client", body: "Create a client record, matching inquiry shell, session shell, and portal shell." },
+  inquiries: { title: "New inquiry", body: "Add a fresh inquiry without making them an active client yet." },
+  quotes: { title: "New quote", body: "Pick a client and draft a quote with package choices." },
+  invoices: { title: "New invoice", body: "Pick a client and invoice type. The amount comes from the accepted quote when available." },
+  emails: { title: "New email log", body: "Record a manual email touchpoint for the selected client." },
+  marketing: { title: "New campaign", body: "Create a draft campaign shell for a client segment." },
+  social: { title: "New social keyword", body: "Create a comment-to-DM rule shell." },
+  addons: { title: "New add-on", body: "Add a reusable add-on to quote and invoice pickers." },
+  calendar: { title: "New availability slot", body: "Open a session slot clients can choose from the portal." },
+  templates: { title: "New template", body: "Create a reusable contract, invoice, quote, questionnaire, or email template." },
+  forms: { title: "New form", body: "Create a contact form shell and add fields from the builder." },
+};
+
+function QuickCreateModal({ page, state, selectedBundle, actions, setPage, onClose }) {
+  const defaultClientId = selectedBundle.client?.id || state.clients[0]?.id || "";
+  const [mode, setMode] = useState(() => {
+    if (page === "inquiries") return "inquiry";
+    if (page === "clients") return "client";
+    if (page === "quotes") return "quote";
+    if (page === "invoices") return "invoice";
+    if (page === "emails") return "email";
+    if (page === "marketing") return "campaign";
+    if (page === "social") return "social";
+    if (page === "addons") return "addon";
+    if (page === "calendar") return "slot";
+    if (page === "templates") return "template";
+    if (page === "forms") return "form";
+    return "client";
+  });
+  const [draft, setDraft] = useState({
+    clientId: defaultClientId,
+    name: "",
+    email: "",
+    phone: "",
+    sessionType: "Maternity Session",
+    location: "Miami, FL",
+    desiredDate: "",
+    notes: "",
+    invoiceKind: "deposit",
+    subject: "",
+    campaignName: "",
+    segment: "All clients",
+    keyword: "",
+    reply: "",
+    price: "",
+    date: "Jul 24, 2026",
+    time: "10:00 AM",
+    templateType: "contracts",
+  });
+  const copy = QUICK_CREATE_COPY[page] || QUICK_CREATE_COPY.dashboard;
+
+  const update = (patch) => setDraft((current) => ({ ...current, ...patch }));
+  const requireClient = ["quote", "invoice", "email"].includes(mode);
+
+  const submit = () => {
+    if (mode === "client") {
+      actions.createClient(draft);
+      setPage("clients");
+      onClose();
+      return;
+    }
+    if (mode === "inquiry") {
+      actions.createInquiry(draft);
+      setPage("inquiries");
+      onClose();
+      return;
+    }
+    if (mode === "quote") {
+      if (!draft.clientId) return;
+      actions.selectClient(draft.clientId);
+      actions.createQuote(draft.clientId, { force: true });
+      setPage("quotes");
+      onClose();
+      return;
+    }
+    if (mode === "invoice") {
+      if (!draft.clientId) return;
+      actions.selectClient(draft.clientId);
+      actions.createInvoice(draft.clientId, draft.invoiceKind);
+      setPage("invoices");
+      onClose();
+      return;
+    }
+    if (mode === "email") {
+      if (!draft.clientId) return;
+      actions.logEmail({ clientId: draft.clientId, kind: "manual", subject: draft.subject || "Manual email" });
+      actions.selectClient(draft.clientId);
+      setPage("emails");
+      onClose();
+      return;
+    }
+    if (mode === "campaign") {
+      actions.addMarketingCampaign({ name: draft.campaignName || "Untitled Campaign", segment: draft.segment });
+      setPage("marketing");
+      onClose();
+      return;
+    }
+    if (mode === "social") {
+      actions.addSocialRule({ keyword: draft.keyword || "BOOK", reply: draft.reply || "Send booking link" });
+      setPage("social");
+      onClose();
+      return;
+    }
+    if (mode === "addon") {
+      actions.addAddon({ name: draft.name || "New Add-On", description: draft.notes, price: Number(draft.price || 0) });
+      setPage("addons");
+      onClose();
+      return;
+    }
+    if (mode === "slot") {
+      actions.addAvailabilitySlot(draft.date, draft.time);
+      setPage("calendar");
+      onClose();
+      return;
+    }
+    if (mode === "template") {
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("eccs:create-template", { detail: { type: draft.templateType } }));
+      setPage("templates");
+      onClose();
+      return;
+    }
+    if (mode === "form") {
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("eccs:create-form"));
+      setPage("forms");
+      onClose();
+    }
+  };
+
+  return (
+    <Modal onClose={onClose} title={copy.title}>
+      <p className="text-sm mb-4" style={{ color: C.charcoal }}>{copy.body}</p>
+      <div className="flex gap-1 overflow-x-auto ecc-scrollbar mb-4">
+        {[
+          ["client", "Client"],
+          ["inquiry", "Inquiry"],
+          ["quote", "Quote"],
+          ["invoice", "Invoice"],
+          ["email", "Email"],
+          ["campaign", "Campaign"],
+          ["social", "Keyword"],
+          ["addon", "Add-on"],
+          ["slot", "Slot"],
+          ["template", "Template"],
+          ["form", "Form"],
+        ].map(([key, label]) => (
+          <button key={key} onClick={() => setMode(key)} className="px-3 py-1.5 rounded-full text-xs font-medium shrink-0" style={{ background: mode === key ? C.charcoal : C.bg, color: mode === key ? "#fff" : C.charcoal }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {requireClient && (
+        <div className="mb-3">
+          <p className="text-[10px] uppercase tracking-[0.25em] mb-1.5" style={{ color: C.taupe }}>Client</p>
+          <select value={draft.clientId} onChange={(event) => update({ clientId: event.target.value })} className="w-full px-3 py-2.5 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+            {state.clients.map((client) => <option key={client.id} value={client.id}>{client.name} — {client.sessionType}</option>)}
+          </select>
+        </div>
+      )}
+
+      {(mode === "client" || mode === "inquiry" || mode === "addon") && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label={mode === "addon" ? "Add-on name" : "Name"} value={draft.name} onChange={(value) => update({ name: value })} />
+          {mode !== "addon" && <Field label="Email" value={draft.email} onChange={(value) => update({ email: value })} />}
+          {mode !== "addon" && <Field label="Phone" value={draft.phone} onChange={(value) => update({ phone: value })} />}
+          {mode !== "addon" && <Field label="Session type" value={draft.sessionType} onChange={(value) => update({ sessionType: value })} />}
+          {mode !== "addon" && <Field label="Location" value={draft.location} onChange={(value) => update({ location: value })} />}
+          {mode === "addon" && <Field label="Price" type="number" value={draft.price} onChange={(value) => update({ price: value })} />}
+        </div>
+      )}
+
+      {mode === "invoice" && (
+        <div className="mb-3">
+          <p className="text-[10px] uppercase tracking-[0.25em] mb-1.5" style={{ color: C.taupe }}>Invoice type</p>
+          <select value={draft.invoiceKind} onChange={(event) => update({ invoiceKind: event.target.value })} className="w-full px-3 py-2.5 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+            <option value="deposit">Deposit invoice</option>
+            <option value="final">Final balance invoice</option>
+            <option value="full">Full-payment invoice</option>
+          </select>
+        </div>
+      )}
+
+      {mode === "email" && <Field label="Subject" value={draft.subject} onChange={(value) => update({ subject: value })} />}
+      {mode === "campaign" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Campaign name" value={draft.campaignName} onChange={(value) => update({ campaignName: value })} />
+          <Field label="Segment" value={draft.segment} onChange={(value) => update({ segment: value })} />
+        </div>
+      )}
+      {mode === "social" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Keyword" value={draft.keyword} onChange={(value) => update({ keyword: value })} />
+          <Field label="Auto reply" value={draft.reply} onChange={(value) => update({ reply: value })} />
+        </div>
+      )}
+      {mode === "slot" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Date label" value={draft.date} onChange={(value) => update({ date: value })} />
+          <Field label="Time" value={draft.time} onChange={(value) => update({ time: value })} />
+        </div>
+      )}
+      {mode === "template" && (
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.25em] mb-1.5" style={{ color: C.taupe }}>Template type</p>
+          <select value={draft.templateType} onChange={(event) => update({ templateType: event.target.value })} className="w-full px-3 py-2.5 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+            {TEMPLATE_TABS.map((tabOption) => <option key={tabOption.key} value={tabOption.key}>{tabOption.label}</option>)}
+          </select>
+        </div>
+      )}
+      {mode === "form" && <p className="text-sm rounded-2xl p-4" style={{ background: C.bg, color: C.charcoal }}>This creates an untitled form and opens the form builder.</p>}
+      {(mode === "client" || mode === "inquiry" || mode === "addon") && (
+        <div className="mt-3">
+          <p className="text-[10px] uppercase tracking-[0.25em] mb-1.5" style={{ color: C.taupe }}>Notes / description</p>
+          <textarea rows={3} value={draft.notes} onChange={(event) => update({ notes: event.target.value })} className="w-full rounded-2xl p-3 text-sm outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+        </div>
+      )}
+      <button onClick={submit} className="mt-5 w-full py-3 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>
+        Create {mode}
+      </button>
+    </Modal>
   );
 }
 
@@ -732,9 +984,16 @@ function InquiriesPage({ state, actions, setPage }) {
 
 function ClientsPage({ state, selectedBundle, filteredClients, actions, setPage }) {
   const [statusFilter, setStatusFilter] = useState("all");
-  const [visibleCount, setVisibleCount] = useState(8);
+  const [visibleCount, setVisibleCount] = useState(12);
+  const [localQuery, setLocalQuery] = useState("");
 
-  const withStage = filteredClients.map((client) => ({ client, bundle: getClientBundle(state, client.id) }));
+  const searchedClients = filteredClients.filter((client) => {
+    const needle = localQuery.trim().toLowerCase();
+    if (!needle) return true;
+    return [client.name, client.email, client.phone, client.sessionType, client.city, ...(client.tags || [])]
+      .some((value) => String(value || "").toLowerCase().includes(needle));
+  });
+  const withStage = searchedClients.map((client) => ({ client, bundle: getClientBundle(state, client.id) }));
   const scoped = withStage.filter(({ bundle }) => {
     if (statusFilter === "all") return true;
     if (statusFilter === "booked") return bundle.booking.isBooked;
@@ -754,7 +1013,18 @@ function ClientsPage({ state, selectedBundle, filteredClients, actions, setPage 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[380px_1fr] gap-5">
       <Card className="p-4">
-        <SectionLabel icon={Users}>Client Records</SectionLabel>
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-2">
+          <div>
+            <SectionLabel icon={Users}>Client Records</SectionLabel>
+            <p className="text-xs px-5 -mt-1" style={{ color: C.taupe }}>{scoped.length} visible · built to keep working when this becomes 100+ clients</p>
+          </div>
+          {selectedBundle.client && <button onClick={() => actions.selectClient(null)} className="text-xs underline mt-2" style={{ color: C.charcoal }}>List only</button>}
+        </div>
+        <div className="mx-5 mb-3 flex items-center gap-2 px-3 py-2 rounded-full" style={{ background: C.bg }}>
+          <Search size={14} color={C.taupe} />
+          <input value={localQuery} onChange={(event) => { setLocalQuery(event.target.value); setVisibleCount(12); }} placeholder="Search clients by name, email, phone, tag..." className="bg-transparent outline-none text-sm w-full" style={{ color: C.ink }} />
+          {localQuery && <button onClick={() => setLocalQuery("")}><X size={13} color={C.taupe} /></button>}
+        </div>
         <div className="flex gap-1.5 px-5 pb-3 overflow-x-auto ecc-scrollbar">
           {filters.map((filter) => (
             <button
@@ -789,7 +1059,7 @@ function ClientsPage({ state, selectedBundle, filteredClients, actions, setPage 
           {scoped.length === 0 && <p className="text-sm px-3 py-2" style={{ color: C.taupe }}>No clients match this filter.</p>}
         </div>
         {visibleCount < scoped.length && (
-          <button onClick={() => setVisibleCount((count) => count + 8)} className="w-full mt-3 py-2 rounded-xl text-xs font-medium" style={{ background: C.bg, color: C.charcoal }}>
+          <button onClick={() => setVisibleCount((count) => count + 24)} className="w-full mt-3 py-2 rounded-xl text-xs font-medium" style={{ background: C.bg, color: C.charcoal }}>
             Show more ({scoped.length - visibleCount} remaining)
           </button>
         )}
@@ -1044,7 +1314,7 @@ function QuotesDashboard({ state, actions }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="ecc-display text-2xl" style={{ color: C.ink }}>Quotes</p>
       </div>
-      <p className="text-sm" style={{ color: C.charcoal }}>Every quote across every client. Click one to open it — that also focuses the client everywhere else in admin. To start a new quote, pick the client first from Clients or the switcher above.</p>
+      <p className="text-sm" style={{ color: C.charcoal }}>Quotes are the decision layer. Open a client, build the offer, add required package choices, then send it for approval.</p>
 
       <Card className="p-4 flex flex-wrap items-center gap-2">
         <div className="flex gap-1 overflow-x-auto ecc-scrollbar">
@@ -1103,7 +1373,7 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
         <button onClick={() => actions.selectClient(null)} className="text-xs flex items-center gap-1" style={{ color: C.charcoal }}><ChevronLeft size={14} /> All quotes</button>
         {!quote && (
           <button onClick={() => actions.createQuote(selectedBundle.client.id)} className="px-3.5 py-2 rounded-full text-xs font-medium text-white" style={{ background: C.forest }}>
-            Create guarded quote
+            Create quote
           </button>
         )}
       </div>
@@ -1141,8 +1411,27 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
           <p className="text-[10px] uppercase tracking-[0.25em] mb-2" style={{ color: C.taupe }}>Notes to client</p>
           <textarea rows={3} value={quote.notes || ""} onChange={(event) => actions.patchQuote(quote.id, { notes: event.target.value })} className="w-full rounded-2xl p-4 text-sm outline-none mb-6" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
 
+          <div className="rounded-3xl p-4 mb-6" style={{ background: C.bg }}>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Package choice boxes</p>
+                <p className="text-xs mt-1" style={{ color: C.charcoal }}>Use these when the client must pick one package before accepting.</p>
+              </div>
+              <button onClick={() => actions.addQuotePackageGroup(quote.id, selectedBundle.client?.packageId)} className="px-3 py-2 rounded-full text-xs font-medium text-white" style={{ background: C.forest }}>+ Pick-one group</button>
+            </div>
+            <div className="space-y-3">
+              {(quote.optionGroups || []).length === 0 && <p className="text-sm rounded-2xl p-4" style={{ background: "#fff", color: C.taupe }}>No package choice group yet. Add one when the client needs to choose between packages.</p>}
+              {(quote.optionGroups || []).map((group) => (
+                <QuoteOptionGroupEditor key={group.id} quote={quote} group={group} actions={actions} />
+              ))}
+            </div>
+          </div>
+
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Line Items</p>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Included line items and optional add-ons</p>
+              <p className="text-xs mt-1" style={{ color: C.charcoal }}>Included items count now. Optional add-ons only count when selected.</p>
+            </div>
           </div>
           <div className="space-y-4 mb-4">
             {quote.lineItems.map((item) => (
@@ -1157,13 +1446,24 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
                   <Field compact label="Unit price" type="number" value={item.unitPrice} onChange={(value) => actions.patchQuoteItem(quote.id, item.id, { unitPrice: Number(value || 0) })} />
                 </div>
                 <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
-                  <button
-                    onClick={() => actions.patchQuoteItem(quote.id, item.id, { optional: !item.optional })}
-                    className="text-xs px-2.5 py-1 rounded-full font-medium"
-                    style={{ background: item.optional ? "#fbf1e6" : C.bg, color: item.optional ? "#9a6b2f" : C.taupe }}
-                  >
-                    {item.optional ? "Optional add-on for client" : "Mark as optional add-on"}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => actions.patchQuoteItem(quote.id, item.id, { optional: !item.optional, selected: item.optional ? false : item.selected })}
+                      className="text-xs px-2.5 py-1 rounded-full font-medium"
+                      style={{ background: item.optional ? "#fbf1e6" : C.bg, color: item.optional ? "#9a6b2f" : C.taupe }}
+                    >
+                      {item.optional ? "Optional add-on" : "Mark optional"}
+                    </button>
+                    {item.optional && (
+                      <button
+                        onClick={() => actions.patchQuoteItem(quote.id, item.id, { selected: !item.selected })}
+                        className="text-xs px-2.5 py-1 rounded-full font-medium"
+                        style={{ background: item.selected ? "#eaf1ee" : C.bg, color: item.selected ? C.forest : C.charcoal }}
+                      >
+                        {item.selected ? "Selected in total" : "Not in total"}
+                      </button>
+                    )}
+                  </div>
                   <button onClick={() => actions.removeQuoteItem(quote.id, item.id)} className="text-xs" style={{ color: C.red }}>Remove</button>
                 </div>
               </div>
@@ -1176,7 +1476,7 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
             <CatalogPicker label="+ Add addon" options={state.addons} onPick={(addon) => actions.addQuoteCatalogItem(quote.id, { name: addon.name, description: addon.description, unitPrice: addon.price, optional: true })} />
             <button onClick={() => setPage("addons")} className="text-xs underline" style={{ color: C.forest }}>Manage add-ons →</button>
           </div>
-          <p className="text-xs mb-6" style={{ color: C.taupe }}>Client-must-pick-one bundles are next on the roadmap — for now, mark choices as optional add-ons.</p>
+          <p className="text-xs mb-6" style={{ color: C.taupe }}>Quote total is recalculated from included items, selected optional add-ons, and selected package options.</p>
 
           <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Actions</p>
           <div className="flex flex-wrap gap-2">
@@ -1199,6 +1499,7 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
           <p className="ecc-display text-4xl mt-2" style={{ color: C.ink }}>{quote.number}</p>
           <p className="text-sm mt-2" style={{ color: C.charcoal }}>{quote.eventType}</p>
           <div className="mt-6 space-y-3">
+            {(quote.optionGroups || []).map((group) => <QuoteOptionGroupPreview key={group.id} group={group} quote={quote} actions={actions} readOnly />)}
             {quote.lineItems.map((item) => (
               <div key={item.id} className="flex items-start justify-between gap-3 pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
                 <div>
@@ -1427,6 +1728,90 @@ function DescriptionEditor({ value, onChange }) {
         style={{ color: C.ink }}
         placeholder="Describe this item. It can grow as long as you need."
       />
+    </div>
+  );
+}
+
+function QuoteOptionGroupEditor({ quote, group, actions }) {
+  const selected = new Set(group.selectedOptionIds || []);
+  return (
+    <div className="rounded-2xl p-4" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_160px_80px] gap-2 items-end mb-3">
+        <Field compact label="Group title" value={group.title || ""} onChange={(value) => actions.patchQuoteOptionGroup(quote.id, group.id, { title: value })} />
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.25em] mb-1.5" style={{ color: C.taupe }}>Mode</p>
+          <select value={group.selectionMode || "single"} onChange={(event) => actions.patchQuoteOptionGroup(quote.id, group.id, { selectionMode: event.target.value, selectedOptionIds: event.target.value === "single" ? (group.selectedOptionIds || []).slice(0, 1) : group.selectedOptionIds || [] })} className="w-full px-3 py-2.5 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+            <option value="single">Pick one</option>
+            <option value="multiple">Pick many</option>
+          </select>
+        </div>
+        <button onClick={() => actions.removeQuoteOptionGroup(quote.id, group.id)} className="text-xs justify-self-end" style={{ color: C.red }}>Remove</button>
+      </div>
+      <textarea value={group.description || ""} onChange={(event) => actions.patchQuoteOptionGroup(quote.id, group.id, { description: event.target.value })} rows={2} className="w-full rounded-xl p-3 text-sm outline-none mb-3" style={{ border: `1px solid ${C.line}`, color: C.ink }} placeholder="Explain how the client should choose." />
+
+      <div className="space-y-3">
+        {(group.options || []).map((option) => (
+          <div key={option.id} className="rounded-2xl p-3" style={{ background: C.bg }}>
+            <div className="flex items-center gap-2 mb-2">
+              <button onClick={() => actions.selectQuoteOption(quote.id, group.id, option.id, !selected.has(option.id))} className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center" style={{ border: `1px solid ${selected.has(option.id) ? C.forest : C.taupe}`, background: selected.has(option.id) ? C.forest : "#fff" }}>
+                {selected.has(option.id) && <Check size={12} color="#fff" />}
+              </button>
+              <p className="text-xs" style={{ color: C.charcoal }}>Selected option affects the quote total</p>
+              <div className="flex-1" />
+              <button onClick={() => actions.removeQuoteOption(quote.id, group.id, option.id)} className="text-xs" style={{ color: C.red }}>Remove option</button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_110px_110px] gap-2 mb-2">
+              <Field compact label="Package name" value={option.name || ""} onChange={(value) => actions.patchQuoteOption(quote.id, group.id, option.id, { name: value })} />
+              <Field compact label="Qty" type="number" value={option.quantity || 1} onChange={(value) => actions.patchQuoteOption(quote.id, group.id, option.id, { quantity: Number(value || 0) })} />
+              <Field compact label="Price" type="number" value={option.unitPrice || 0} onChange={(value) => actions.patchQuoteOption(quote.id, group.id, option.id, { unitPrice: Number(value || 0) })} />
+            </div>
+            <DescriptionEditor value={option.description || ""} onChange={(value) => actions.patchQuoteOption(quote.id, group.id, option.id, { description: value })} />
+          </div>
+        ))}
+      </div>
+      <button onClick={() => actions.addQuoteOption(quote.id, group.id)} className="mt-3 px-3 py-2 rounded-full text-xs font-medium" style={{ background: C.cream, color: C.ink }}>+ Add custom option</button>
+    </div>
+  );
+}
+
+function QuoteOptionGroupPreview({ group, quote, actions, readOnly = false }) {
+  const selected = new Set(group.selectedOptionIds || []);
+  return (
+    <div className="rounded-2xl p-4" style={{ border: `1px solid ${C.line}`, background: C.bg }}>
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div>
+          <p className="text-sm font-medium" style={{ color: C.ink }}>{group.title || "Package choices"}</p>
+          {group.description && <p className="text-xs mt-1" style={{ color: C.charcoal }}>{group.description}</p>}
+        </div>
+        <Pill tone={group.required ? "warn" : "neutral"}>{group.selectionMode === "multiple" ? "choose options" : "choose one"}</Pill>
+      </div>
+      <div className="space-y-2 mt-3">
+        {(group.options || []).map((option) => {
+          const isSelected = selected.has(option.id);
+          return (
+            <button
+              key={option.id}
+              disabled={readOnly}
+              onClick={() => !readOnly && actions?.selectQuoteOption(quote.id, group.id, option.id, !isSelected)}
+              className="w-full text-left rounded-2xl p-3"
+              style={{ background: isSelected ? "#fff" : "rgba(255,255,255,0.55)", border: `1px solid ${isSelected ? C.forest : C.line}` }}
+            >
+              <div className="flex items-start gap-3">
+                <span className="w-5 h-5 rounded-full mt-0.5 shrink-0 flex items-center justify-center" style={{ border: `1px solid ${isSelected ? C.forest : C.taupe}`, background: isSelected ? C.forest : "#fff" }}>
+                  {isSelected && <Check size={12} color="#fff" />}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-medium" style={{ color: C.ink }}>{option.name}</p>
+                    <p className="text-sm shrink-0" style={{ color: C.ink }}>{formatCurrency((option.quantity || 1) * (option.unitPrice || 0))}</p>
+                  </div>
+                  <RichText text={option.description} className="text-xs mt-1" style={{ color: C.charcoal }} />
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1966,7 +2351,11 @@ function PaymentsPage({ state, selectedBundle, actions, setPage }) {
             {state.payments.map((payment) => (
               <button key={payment.id} onClick={() => setReceipt(payment)} className="w-full text-left flex items-center justify-between rounded-xl p-3" style={{ background: C.bg }}>
                 <div>
-                  <p className="text-sm font-medium" style={{ color: C.ink }}>{formatCurrency(payment.amount)}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium" style={{ color: payment.amount < 0 ? C.red : C.ink }}>{formatCurrency(payment.amount)}</p>
+                    {payment.status === "refunded" && <Pill tone="warn">refunded</Pill>}
+                    {payment.amount < 0 && <Pill tone="warn">refund</Pill>}
+                  </div>
                   <p className="text-xs mt-1" style={{ color: C.charcoal }}>{getClientBundle(state, payment.clientId).client?.name} • {payment.method}</p>
                 </div>
                 <p className="text-xs" style={{ color: C.taupe }}>{payment.paidAt}</p>
@@ -2052,7 +2441,19 @@ function PaymentsPage({ state, selectedBundle, actions, setPage }) {
             <PriceRow label="Method" value={receipt.method} />
             <PriceRow label="Date" value={receipt.paidAt} />
             <PriceRow label="Invoice" value={state.invoices.find((i) => i.id === receipt.invoiceId)?.number || "—"} />
+            {receipt.status === "refunded" && <PriceRow label="Status" value={`Refunded ${receipt.refundedAt || ""}`} />}
             {receipt.note && <PriceRow label="Note" value={receipt.note} />}
+          </div>
+          <div className="flex flex-wrap gap-2 mt-6 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
+            {receipt.amount > 0 && receipt.status !== "refunded" && (
+              <button onClick={() => { actions.refundPayment(receipt.id, receipt.amount, "Refund recorded from payment receipt."); setReceipt(null); }} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: "#f8ece8", color: C.red }}>
+                Refund payment
+              </button>
+            )}
+            <button onClick={() => { actions.deletePayment(receipt.id); setReceipt(null); }} className="px-3 py-2 rounded-full text-xs font-medium" style={{ border: `1px solid ${C.line}`, color: C.red }}>
+              Delete payment
+            </button>
+            <p className="text-xs w-full" style={{ color: C.taupe }}>Refunding or deleting rebalances the invoice. If payment was the booking gate, the project unlock is removed.</p>
           </div>
         </Modal>
       )}
@@ -2316,7 +2717,11 @@ function GalleryLinkCard({ galleryLink }) {
           // eslint-disable-next-line @next/next/no-img-element
           <img src={galleryLink.previewImage} alt="" className="w-full h-full object-cover" />
         ) : (
-          <ImageIcon size={28} color={C.taupe} />
+          <div className="w-full h-full flex flex-col items-center justify-center text-center px-6" style={{ background: `linear-gradient(135deg, ${C.cream}, ${C.bg})` }}>
+            <ImageIcon size={30} color={C.taupe} />
+            <p className="ecc-display text-2xl mt-3" style={{ color: C.ink }}>{galleryLink.title || "Pixieset Gallery"}</p>
+            <p className="text-xs mt-1" style={{ color: C.taupe }}>Preview image not added yet. Link still opens normally.</p>
+          </div>
         )}
       </div>
       <div className="p-3" style={{ background: "#fff" }}>
@@ -2739,24 +3144,20 @@ function CalendarPage({ state, selectedBundle, actions, setPage }) {
   );
 }
 
-function MarketingPage({ state, setPage }) {
+function MarketingPage({ state, actions, setPage }) {
   const segments = useMemo(() => {
     const counts = {};
     state.clients.forEach((client) => (client.tags || []).forEach((tag) => { counts[tag] = (counts[tag] || 0) + 1; }));
     return Object.entries(counts).map(([name, count]) => ({ name, count }));
   }, [state.clients]);
 
-  const campaigns = [
-    { name: "Fall Mini-Sessions Promo", segment: segments[0]?.name || "All clients", status: "Sent", stats: "41% open · 9% click" },
-    { name: "Welcome Series — New Inquiry", segment: "All inquiries", status: "Automated", stats: "Triggers on inquiry approval" },
-    { name: "Past Client Re-Engagement", segment: "Returning inquiry", status: "Draft", stats: "—" },
-  ];
+  const campaigns = state.marketingCampaigns || [];
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="ecc-display text-2xl" style={{ color: C.ink }}>Email Marketing</p>
-        <button className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>
+        <button onClick={() => actions.addMarketingCampaign({ name: "Untitled Campaign", segment: segments[0]?.name || "All clients" })} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>
           <Plus size={14} /> New campaign
         </button>
       </div>
@@ -2780,7 +3181,7 @@ function MarketingPage({ state, setPage }) {
         <SectionLabel icon={Mail}>Campaigns</SectionLabel>
         <div className="px-5 pb-5">
           {campaigns.map((campaign, index) => (
-            <div key={campaign.name} className="flex items-center justify-between py-3" style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}` }}>
+            <div key={campaign.id || campaign.name} className="flex items-center justify-between py-3" style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}` }}>
               <div>
                 <p className="text-sm font-medium" style={{ color: C.ink }}>{campaign.name}</p>
                 <p className="text-xs" style={{ color: C.taupe }}>{campaign.segment} · {campaign.stats}</p>
@@ -2801,7 +3202,8 @@ const DM_RULES = [
   { keyword: "BOOK", reply: "Direct link to the inquiry form", count: 64 },
 ];
 
-function SocialPage() {
+function SocialPage({ state, actions }) {
+  const rules = state.socialRules || DM_RULES;
   return (
     <div className="space-y-4">
       <p className="ecc-display text-2xl" style={{ color: C.ink }}>Social Messaging</p>
@@ -2822,10 +3224,10 @@ function SocialPage() {
       <Card className="p-5">
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Keyword Rules</p>
-          <button className="flex items-center gap-1 text-xs font-medium" style={{ color: C.forest }}><Plus size={12} /> Add rule</button>
+          <button onClick={() => actions.addSocialRule({ keyword: "NEW", reply: "Send booking link" })} className="flex items-center gap-1 text-xs font-medium" style={{ color: C.forest }}><Plus size={12} /> Add rule</button>
         </div>
-        {DM_RULES.map((rule, index) => (
-          <div key={rule.keyword} className="flex items-center justify-between py-3" style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}` }}>
+        {rules.map((rule, index) => (
+          <div key={rule.id || rule.keyword} className="flex items-center justify-between py-3" style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}` }}>
             <div>
               <p className="text-sm font-medium" style={{ color: C.ink }}>"{rule.keyword}"</p>
               <p className="text-xs" style={{ color: C.charcoal }}>{rule.reply}</p>
@@ -2872,6 +3274,11 @@ function FormsPage() {
     setForms((list) => [{ id, name: "Untitled Form", status: "Draft", platforms: [], fields: [] }, ...list]);
     setOpenId(id);
   };
+
+  useEffect(() => {
+    window.addEventListener("eccs:create-form", newForm);
+    return () => window.removeEventListener("eccs:create-form", newForm);
+  }, []);
 
   if (current) {
     const slug = current.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -2999,7 +3406,35 @@ const SEED_TEMPLATES = {
   ],
 };
 
-const TEMPLATE_VARIABLES = ["{{client_name}}", "{{session_type}}", "{{session_date}}", "{{session_time}}", "{{location}}", "{{total}}", "{{deposit}}"];
+const TEMPLATE_VARIABLES = ["{{client_name}}", "{{client_email}}", "{{session_type}}", "{{session_date}}", "{{session_time}}", "{{location}}", "{{total}}", "{{deposit}}", "{{balance_due}}", "{{invoice_number}}"];
+
+const TEMPLATE_MODULE_PRESETS = {
+  contracts: [
+    { type: "parties", label: "Parties block", body: "Client: {{client_name}}\nStudio: EC Creative Studios" },
+    { type: "clause", label: "Payment terms clause", body: "Payment terms: {{deposit}} is due to secure the date. Remaining balance is due before the session." },
+    { type: "signature", label: "Client + studio signatures", body: "Client signature: ____________________\nEC Creative Studios: ____________________" },
+  ],
+  invoices: [
+    { type: "payment", label: "Payment schedule", body: "Amount due: {{balance_due}}\nDue date: {{session_date}}" },
+    { type: "method", label: "Payment methods", body: "Card, Zelle, or approved manual payment." },
+    { type: "late", label: "Past-due note", body: "Past-due invoices may pause delivery or booking progress." },
+  ],
+  quotes: [
+    { type: "package_group", label: "Pick-one package group", body: "Choose one package option before accepting this quote." },
+    { type: "addons", label: "Optional add-ons", body: "Optional add-ons may be selected before acceptance and will update the total." },
+    { type: "expiration", label: "Quote expiration", body: "This quote is valid until the expiration date listed above." },
+  ],
+  questionnaires: [
+    { type: "short", label: "Short-answer field", body: "Question: What should we know before your session?" },
+    { type: "choice", label: "Multiple-choice field", body: "Question: Which style feels most like you?\nOptions: Editorial, Lifestyle, Classic, Documentary" },
+    { type: "upload", label: "Reference upload", body: "Prompt: Upload or paste inspiration images for your session." },
+  ],
+  emails: [
+    { type: "subject", label: "Subject line", body: "Subject: Your {{session_type}} details" },
+    { type: "cta", label: "Portal CTA", body: "Button: Open your client portal" },
+    { type: "footer", label: "Studio signature", body: "EC Creative Studios\nMiami, FL" },
+  ],
+};
 
 function TemplatesPage() {
   const [tab, setTab] = useState("contracts");
@@ -3012,15 +3447,27 @@ function TemplatesPage() {
   const updateField = (field, value) => setData((d) => ({ ...d, [editing.type]: d[editing.type].map((entry) => (entry.id === editing.id ? { ...entry, [field]: value } : entry)) }));
   const updateSetting = (key, value) => setData((d) => ({ ...d, [editing.type]: d[editing.type].map((entry) => (entry.id === editing.id ? { ...entry, settings: { ...entry.settings, [key]: value } } : entry)) }));
   const insertVariable = (variable) => updateField("body", `${current.body || ""} ${variable}`);
+  const addModule = (module) => updateField("modules", [...(current.modules || []), { id: `mod_${Date.now()}_${Math.random()}`, ...module, required: false }]);
+  const updateModule = (moduleId, patch) => updateField("modules", (current.modules || []).map((module) => (module.id === moduleId ? { ...module, ...patch } : module)));
+  const removeModule = (moduleId) => updateField("modules", (current.modules || []).filter((module) => module.id !== moduleId));
+  const insertModuleBody = (module) => updateField("body", `${current.body || ""}\n\n${module.body || ""}`.trim());
 
-  const newTemplate = () => {
-    const id = `${tab}_${Date.now()}`;
-    const blank = tab === "emails"
-      ? { id, name: "Untitled Email Template", created: "Just now", subject: "", body: "" }
-      : { id, name: `Untitled ${TEMPLATE_TABS.find((entry) => entry.key === tab).label.replace(/s$/, "")} Template`, created: "Just now", body: "", settings: tab === "invoices" ? { paymentDue: "Within 30 days" } : tab === "quotes" ? { autoCreateInvoice: true, documentExpiry: false, documentReminders: false } : { documentExpiry: false, documentReminders: false, ...(tab === "contracts" ? { signatureRequired: true } : {}) } };
-    setData((d) => ({ ...d, [tab]: [blank, ...d[tab]] }));
-    setEditing({ type: tab, id });
+  const newTemplate = (type = tab) => {
+    const id = `${type}_${Date.now()}`;
+    const label = TEMPLATE_TABS.find((entry) => entry.key === type)?.label || "Template";
+    const blank = type === "emails"
+      ? { id, name: "Untitled Email Template", created: "Just now", subject: "", body: "", modules: [] }
+      : { id, name: `Untitled ${label.replace(/s$/, "")} Template`, created: "Just now", body: "", modules: [], settings: type === "invoices" ? { paymentDue: "Within 30 days" } : type === "quotes" ? { autoCreateInvoice: true, documentExpiry: false, documentReminders: false } : { documentExpiry: false, documentReminders: false, ...(type === "contracts" ? { signatureRequired: true } : {}) } };
+    setTab(type);
+    setData((d) => ({ ...d, [type]: [blank, ...d[type]] }));
+    setEditing({ type, id });
   };
+
+  useEffect(() => {
+    const handler = (event) => newTemplate(event.detail?.type || tab);
+    window.addEventListener("eccs:create-template", handler);
+    return () => window.removeEventListener("eccs:create-template", handler);
+  }, [tab]);
 
   if (editing && current) {
     return (
@@ -3077,6 +3524,31 @@ function TemplatesPage() {
             {editing.type === "emails" && (
               <input value={current.subject} onChange={(event) => updateField("subject", event.target.value)} placeholder="Subject" className="w-full mb-3 px-3 py-2 rounded-xl text-sm font-medium" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
             )}
+            <div className="rounded-2xl p-3 mb-3" style={{ background: C.bg }}>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Template modules</p>
+                  <p className="text-xs mt-1" style={{ color: C.charcoal }}>Add real document sections instead of one giant blank textarea.</p>
+                </div>
+                <select onChange={(event) => { const preset = (TEMPLATE_MODULE_PRESETS[editing.type] || []).find((entry) => entry.type === event.target.value); if (preset) { addModule(preset); insertModuleBody(preset); event.target.value = ""; } }} className="text-xs px-2 py-1 rounded-lg" style={{ border: `1px solid ${C.line}`, color: C.charcoal }}>
+                  <option value="">Add module</option>
+                  {(TEMPLATE_MODULE_PRESETS[editing.type] || []).map((module) => <option key={module.type} value={module.type}>{module.label}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                {(current.modules || []).length === 0 && <p className="text-xs" style={{ color: C.taupe }}>No modules yet. Add the sections this template needs.</p>}
+                {(current.modules || []).map((module) => (
+                  <div key={module.id} className="rounded-xl p-2" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+                    <div className="flex items-center gap-2">
+                      <input value={module.label} onChange={(event) => updateModule(module.id, { label: event.target.value })} className="flex-1 bg-transparent outline-none text-sm font-medium" style={{ color: C.ink }} />
+                      <button onClick={() => updateModule(module.id, { required: !module.required })} className="text-xs px-2 py-1 rounded-full" style={{ background: module.required ? "#eaf1ee" : C.bg, color: module.required ? C.forest : C.taupe }}>{module.required ? "Required" : "Optional"}</button>
+                      <button onClick={() => removeModule(module.id)} className="text-xs" style={{ color: C.red }}>Remove</button>
+                    </div>
+                    <p className="text-xs mt-1" style={{ color: C.taupe }}>{module.type}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="flex items-center gap-1 mb-3 pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
               <div className="flex-1" />
               <select onChange={(event) => { if (event.target.value) { insertVariable(event.target.value); event.target.value = ""; } }} className="text-xs px-2 py-1 rounded-lg" style={{ border: `1px solid ${C.line}`, color: C.charcoal }}>
@@ -3102,7 +3574,7 @@ function TemplatesPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="ecc-display text-2xl" style={{ color: C.ink }}>Templates</p>
-        <button onClick={newTemplate} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>
+        <button onClick={() => newTemplate()} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>
           <Plus size={14} /> New Template
         </button>
       </div>
