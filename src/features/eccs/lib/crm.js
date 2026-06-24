@@ -779,9 +779,9 @@ export function getClientBundle(state, clientId) {
     .sort((a, b) => String(b.paidAt).localeCompare(String(a.paidAt)));
   const session = state.sessions.find((entry) => entry.clientId === clientId) || null;
   const portal = state.portalProfiles.find((entry) => entry.clientId === clientId) || null;
-  const messages = state.messages.filter((entry) => entry.clientId === clientId);
-  const notes = state.notes.filter((entry) => entry.clientId === clientId);
-  const activity = state.activity.filter((entry) => entry.clientId === clientId);
+  const messages = (state.messages || []).filter((entry) => entry.clientId === clientId);
+  const notes = (state.notes || []).filter((entry) => entry.clientId === clientId);
+  const activity = (state.activity || []).filter((entry) => entry.clientId === clientId);
   const emailLogs = (state.emailLogs || []).filter((entry) => entry.clientId === clientId);
   const scheduledEmails = (state.scheduledEmails || []).filter((entry) => entry.clientId === clientId);
   const stage = derivePipelineStage({ client, inquiry, quotes, contracts, invoices, session });
@@ -1795,7 +1795,7 @@ export function crmReducer(state, action) {
               text: action.text.trim(),
               createdAt: stamp(),
             },
-            ...state.messages,
+            ...(state.messages || []),
           ],
         },
         client.name,
@@ -2532,7 +2532,7 @@ function withActivity(state, clientName, text) {
         text,
         createdAt: stamp(),
       },
-      ...state.activity,
+      ...(state.activity || []),
     ],
   };
 }

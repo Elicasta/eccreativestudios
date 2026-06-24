@@ -205,7 +205,7 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
           {page === "forms" && <FormsPage />}
           {page === "templates" && <TemplatesPage />}
           {page === "workflows" && <PlaceholderPage title="Workflows" body="Automation rules (auto-send prep guide, auto-remind on unpaid invoice) live here in v2. This skeleton moves clients through the pipeline via real actions and Manual Override instead." />}
-          {page === "activity" && <ActivityPage state={state} actions={actions} setPage={go} />}
+          {page === "activity" && <ActivityPage state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
           {page === "settings" && <SettingsPage state={state} actions={actions} />}
           {page === "branding" && <BrandingPage state={state} actions={actions} />}
           {page === "team" && <PlaceholderPage title="Team" body="Add Emily and any second shooters or editors with role-based access once auth exists." />}
@@ -3536,6 +3536,211 @@ function ClientMessagesPage({ state, selectedBundle, actions, setPage }) {
             </div>
           </>
         )}
+      </Card>
+    </div>
+  );
+}
+
+
+function ActivityPage({ state, selectedBundle, actions, setPage }) {
+  const [filter, setFilter] = useState("all");
+  const safeClients = Array.isArray(state.clients) ? state.clients : [];
+  const safeActivity = Array.isArray(state.activity) ? state.activity : [];
+  const safeMessages = Array.isArray(state.messages) ? state.messages : [];
+  const safeEmailLogs = Array.isArray(state.emailLogs) ? state.emailLogs : [];
+  const safeInvoices = Array.isArray(state.invoices) ? state.invoices : [];
+  const safeContracts = Array.isArray(state.contracts) ? state.contracts : [];
+  const safeQuotes = Array.isArray(state.quotes) ? state.quotes : [];
+  const selectedClientId = selectedBundle?.client?.id || state.selectedClientId;
+
+  const clientById = useMemo(() => {
+    return Object.fromEntries(safeClients.map((client) => [client.id, client]));
+  }, [safeClients]);
+
+  const findClientName = (clientId) => clientById[clientId]?.name || "System";
+
+  const activityRows = safeActivity.map((entry) => ({
+    id: entry.id,
+    kind: "Activity",
+    tone: "neutral",
+    icon: Bell,
+    clientId: entry.clientId,
+    title: findClientName(entry.clientId),
+    body: entry.text || "Activity recorded.",
+    timestamp: entry.createdAt || "No timestamp",
+    page: entry.clientId ? "clients" : "activity",
+  }));
+
+  const messageRows = safeMessages.map((message) => ({
+    id: message.id,
+    kind: message.from === "client" ? "Client message" : "Studio message",
+    tone: message.from === "client" && !message.readAt ? "done" : "info",
+    icon: MessageCircle,
+    clientId: message.clientId,
+    title: findClientName(message.clientId),
+    body: message.text || "Message logged.",
+    timestamp: message.createdAt || "No timestamp",
+    page: "clientMessages",
+  }));
+
+  const emailRows = safeEmailLogs.map((email) => ({
+    id: email.id,
+    kind: "Email",
+    tone: "info",
+    icon: Mail,
+    clientId: email.clientId,
+    title: findClientName(email.clientId),
+    body: email.subject || `${email.kind || "Email"} sent`,
+    timestamp: email.sentAt || email.createdAt || "No timestamp",
+    page: "emails",
+  }));
+
+  const notificationRows = [
+    ...safeMessages
+      .filter((message) => message.from === "client" && !message.readAt)
+      .map((message) => ({
+        id: `notif-message-${message.id}`,
+        kind: "Unread message",
+        tone: "done",
+        icon: MessageCircle,
+        clientId: message.clientId,
+        title: findClientName(message.clientId),
+        body: message.text || "Client sent a message.",
+        timestamp: message.createdAt || "No timestamp",
+        page: "clientMessages",
+      })),
+    ...safeInvoices
+      .filter((invoice) => ["sent", "partially_paid"].includes(invoice.status) && Number(invoice.balanceDue || 0) > 0)
+      .map((invoice) => ({
+        id: `notif-invoice-${invoice.id}`,
+        kind: "Open invoice",
+        tone: "warn",
+        icon: Receipt,
+        clientId: invoice.clientId,
+        title: findClientName(invoice.clientId),
+        body: `${invoice.number || "Invoice"} has ${formatCurrency(invoice.balanceDue || 0)} due${invoice.dueDate ? ` · due ${invoice.dueDate}` : ""}.`,
+        timestamp: invoice.sentAt || invoice.createdAt || "No timestamp",
+        page: "invoices",
+      })),
+    ...safeContracts
+      .filter((contract) => contract.status === "sent")
+      .map((contract) => ({
+        id: `notif-contract-${contract.id}`,
+        kind: "Contract pending",
+        tone: "info",
+        icon: FileSignature,
+        clientId: contract.clientId,
+        title: findClientName(contract.clientId),
+        body: `${contract.number || "Contract"} is waiting for signature.`,
+        timestamp: contract.sentAt || contract.createdAt || "No timestamp",
+        page: "contracts",
+      })),
+    ...safeQuotes
+      .filter((quote) => quote.status === "sent" || quote.status === "viewed")
+      .map((quote) => ({
+        id: `notif-quote-${quote.id}`,
+        kind: quote.status === "viewed" ? "Quote viewed" : "Quote sent",
+        tone: quote.status === "viewed" ? "done" : "info",
+        icon: FileText,
+        clientId: quote.clientId,
+        title: findClientName(quote.clientId),
+        body: `${quote.number || "Quote"} · ${formatCurrency(quote.total || 0)} · ${quote.status}.`,
+        timestamp: quote.viewedAt || quote.sentAt || quote.createdAt || "No timestamp",
+        page: "quotes",
+      })),
+  ];
+
+  const allRows = [...notificationRows, ...messageRows, ...emailRows, ...activityRows];
+  const rows = allRows.filter((row) => {
+    if (filter === "client") return Boolean(selectedClientId) && row.clientId === selectedClientId;
+    if (filter === "messages") return row.page === "clientMessages" || row.kind.toLowerCase().includes("message");
+    if (filter === "notifications") return row.id.startsWith("notif-");
+    return true;
+  });
+
+  const openRow = (row) => {
+    if (row.clientId) actions.selectClient(row.clientId);
+    setPage(row.page || "clients");
+  };
+
+  const unreadCount = safeMessages.filter((message) => message.from === "client" && !message.readAt).length;
+  const openInvoiceCount = safeInvoices.filter((invoice) => ["sent", "partially_paid"].includes(invoice.status) && Number(invoice.balanceDue || 0) > 0).length;
+  const pendingContractCount = safeContracts.filter((contract) => contract.status === "sent").length;
+
+  const filters = [
+    { key: "all", label: "All Activity", count: allRows.length },
+    { key: "client", label: selectedBundle?.client ? `${selectedBundle.client.name}` : "Client Activity", count: selectedClientId ? allRows.filter((row) => row.clientId === selectedClientId).length : 0 },
+    { key: "messages", label: "Messages", count: messageRows.length },
+    { key: "notifications", label: "Notifications", count: notificationRows.length },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="p-5">
+          <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Unread messages</p>
+          <p className="ecc-display text-4xl mt-2" style={{ color: C.ink }}>{unreadCount}</p>
+          <button onClick={() => setFilter("messages")} className="text-xs underline mt-2" style={{ color: C.forest }}>View message activity</button>
+        </Card>
+        <Card className="p-5">
+          <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Open invoices</p>
+          <p className="ecc-display text-4xl mt-2" style={{ color: C.ink }}>{openInvoiceCount}</p>
+          <button onClick={() => setPage("invoices")} className="text-xs underline mt-2" style={{ color: C.forest }}>Go to invoices</button>
+        </Card>
+        <Card className="p-5">
+          <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Pending contracts</p>
+          <p className="ecc-display text-4xl mt-2" style={{ color: C.ink }}>{pendingContractCount}</p>
+          <button onClick={() => setPage("contracts")} className="text-xs underline mt-2" style={{ color: C.forest }}>Go to contracts</button>
+        </Card>
+      </div>
+
+      <Card className="p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between px-5 pt-5 pb-2">
+          <div>
+            <SectionLabel icon={Bell}>Activity & Notifications</SectionLabel>
+            <p className="text-sm px-5" style={{ color: C.charcoal }}>One safe feed for CRM events, messages, emails, and items that need attention.</p>
+          </div>
+          <div className="flex flex-wrap gap-2 px-5 md:px-0">
+            {filters.map((item) => (
+              <button
+                key={item.key}
+                onClick={() => setFilter(item.key)}
+                className="px-3 py-2 rounded-full text-xs font-medium"
+                style={{ background: filter === item.key ? C.forest : C.bg, color: filter === item.key ? "#fff" : C.ink, border: `1px solid ${filter === item.key ? C.forest : C.line}` }}
+              >
+                {item.label} <span style={{ opacity: 0.7 }}>({item.count})</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="px-5 pb-5 mt-2">
+          {rows.length === 0 ? (
+            <EmptyState title="No activity here" body="This filter is empty right now. Switch to All Activity or select another client." />
+          ) : (
+            <div className="divide-y" style={{ borderColor: C.line }}>
+              {rows.map((row) => {
+                const Icon = row.icon || Bell;
+                return (
+                  <button key={row.id} onClick={() => openRow(row)} className="w-full text-left py-4 flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: C.bg }}>
+                      <Icon size={16} color={C.forest} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium" style={{ color: C.ink }}>{row.title}</p>
+                        <Pill tone={row.tone}>{row.kind}</Pill>
+                      </div>
+                      <p className="text-sm mt-1" style={{ color: C.charcoal }}>{row.body}</p>
+                      <p className="text-xs mt-1" style={{ color: C.taupe }}>{row.timestamp}</p>
+                    </div>
+                    <ChevronRight size={15} color={C.taupe} />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </Card>
     </div>
   );
