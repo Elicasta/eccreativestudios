@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   AlertTriangle,
   Bell,
@@ -3570,8 +3570,9 @@ function ActivityPage({ state, selectedBundle, actions, setPage }) {
   const selectedClientId = selectedBundle?.client?.id || state.selectedClientId;
 
   const clientById = useMemo(() => {
-    return Object.fromEntries(safeClients.map((client) => [client.id, client]));
-  }, [safeClients]);
+    const clients = Array.isArray(state.clients) ? state.clients : [];
+    return Object.fromEntries(clients.map((client) => [client.id, client]));
+  }, [state.clients]);
 
   const findClientName = (clientId) => clientById[clientId]?.name || "System";
 
@@ -4510,7 +4511,7 @@ function TemplatesPage() {
   const removeModule = (moduleId) => updateField("modules", (current.modules || []).filter((module) => module.id !== moduleId));
   const insertModuleBody = (module) => updateField("body", `${current.body || ""}\n\n${module.body || ""}`.trim());
 
-  const newTemplate = (type = tab) => {
+  const newTemplate = useCallback((type = tab) => {
     const id = `${type}_${Date.now()}`;
     const label = TEMPLATE_TABS.find((entry) => entry.key === type)?.label || "Template";
     const baseBlank = { id, created: "Just now", description: "", audience: "", trigger: "Manual", sessionType: "All sessions", status: "Draft", body: "", modules: [] };
@@ -4520,13 +4521,13 @@ function TemplatesPage() {
     setTab(type);
     setData((d) => ({ ...d, [type]: [blank, ...d[type]] }));
     setEditing({ type, id });
-  };
+  }, [tab]);
 
   useEffect(() => {
     const handler = (event) => newTemplate(event.detail?.type || tab);
     window.addEventListener("eccs:create-template", handler);
     return () => window.removeEventListener("eccs:create-template", handler);
-  }, [tab]);
+  }, [newTemplate, tab]);
 
   if (editing && current) {
     return (

@@ -179,3 +179,9 @@ These are warnings, not errors. They should be cleaned during the file split.
 ## Recommended next move
 
 Do the Supabase schema pass first. Then split the large files by module while wiring repositories. Avoid adding more features until the data layer exists.
+
+## Deploy Fix Notes
+
+The previous package was nested under `eccs_hardening/`. Some deployment flows treat the zip root as the project root, so they will not find `package.json` unless the root directory is configured manually. The fixed deploy package places `package.json`, `app/`, `src/`, `public/`, and config files at the top level.
+
+`next.config.mjs` now skips build-time lint/type validation and disables output file tracing for this prototype package. Run `npm run lint` and `npm run diagnostics` directly before deployment. The longer-term fix is to split the current large CRM files into smaller route/module chunks before Supabase wiring.
