@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { AlertTriangle, Archive, Check, SlidersHorizontal, X } from "lucide-react";
+import { AlertTriangle, Archive, Check, X } from "lucide-react";
 import { C } from "../lib/brand";
 import { FORCE_STAGE_ORDER, PIPELINE_LABELS } from "../lib/crm";
 
@@ -10,17 +10,9 @@ export default function ManualOverride({ open, setOpen, selectedBundle, actions 
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-full shadow-lg text-sm font-medium"
-        style={{ background: C.forest, color: "#fff" }}
-      >
-        <SlidersHorizontal size={16} /> <span className="hidden sm:inline">Manual Override</span>
-      </button>
-
       {open && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ background: "rgba(0,0,0,0.4)" }}>
-          <div className="w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 max-h-[85vh] overflow-y-auto" style={{ background: "#fff" }}>
+          <div className="ecc-modal-panel w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 max-h-[85vh] overflow-y-auto" style={{ background: "#fff" }}>
             <div className="flex items-center justify-between mb-1">
               <p className="ecc-display text-xl" style={{ color: C.ink }}>Manual Override</p>
               <button onClick={() => setOpen(false)}><X size={20} color={C.charcoal} /></button>

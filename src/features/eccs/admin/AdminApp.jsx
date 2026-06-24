@@ -136,21 +136,21 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
   const currentNavItem = FLAT_NAV.find((item) => item.key === page);
 
   return (
-    <div className="flex" style={{ minHeight: "calc(100vh - 44px)" }}>
+    <div className="ecc-app-shell flex">
       <aside className="hidden md:flex md:flex-col w-72 shrink-0 px-4 py-6" style={{ background: C.charcoal }}>
         <Sidebar page={page} setPage={go} />
       </aside>
 
       {drawer && (
-        <div className="fixed inset-0 z-40 flex md:hidden">
-          <div className="w-72 px-4 py-6 overflow-y-auto" style={{ background: C.charcoal }}>
+        <div className="ecc-mobile-overlay fixed inset-0 z-40 flex md:hidden">
+          <div className="ecc-mobile-drawer w-72 px-4 py-6 overflow-y-auto" style={{ background: C.charcoal }}>
             <Sidebar page={page} setPage={go} onClose={() => setDrawer(false)} />
           </div>
           <div className="flex-1" style={{ background: "rgba(0,0,0,0.4)" }} onClick={() => setDrawer(false)} />
         </div>
       )}
 
-      <main className="flex-1 min-w-0 pb-16 md:pb-0">
+      <main className="ecc-mobile-main flex-1 min-w-0 md:pb-0">
         <Topbar
           query={query}
           setQuery={setQuery}
@@ -223,7 +223,7 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
         />
       )}
 
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex justify-around py-2" style={{ background: C.charcoal }}>
+      <div className="ecc-mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 z-30 flex justify-around" style={{ background: C.charcoal }}>
         {BOTTOM_NAV.map((item) => {
           const Icon = item.icon;
           const active = item.key === "__more" ? drawer : page === item.key;
@@ -324,12 +324,12 @@ function Topbar({ query, setQuery, onMenu, title, state, selectedBundle, actions
     return [...clientResults, ...quoteResults, ...invoiceResults, ...inquiryResults, ...sessionResults].slice(0, 8);
   }, [query, state, actions, setPage, setQuery]);
   return (
-    <div className="relative flex items-center gap-3 px-4 sm:px-6 py-4" style={{ borderBottom: `1px solid ${C.line}` }}>
+    <div className="relative flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 sm:px-6 py-3 sm:py-4" style={{ borderBottom: `1px solid ${C.line}` }}>
       <button className="md:hidden" onClick={onMenu}><Menu size={20} color={C.ink} /></button>
       <button disabled={!canGoBack} onClick={onBack} className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium disabled:opacity-30" style={{ background: C.bg, color: C.charcoal }} title="Back to previous CRM view">
         <ChevronLeft size={14} /> Back
       </button>
-      <p className="ecc-display text-2xl flex-1" style={{ color: C.ink }}>
+      <p className="ecc-display text-xl sm:text-2xl flex-1 min-w-[120px]" style={{ color: C.ink }}>
         {title}
       </p>
       <div className="hidden sm:flex relative items-center gap-2 px-3 py-2 rounded-full w-full max-w-xs" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
@@ -1928,10 +1928,10 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
           <div className="flex flex-wrap gap-2">
             <button onClick={() => { const d = buildEmailDraft("quote", selectedBundle); requestSend(d.subject, d.body, () => actions.sendQuote(quote.id)); }} className="px-4 py-2.5 rounded-full text-sm font-medium text-white" style={{ background: C.forest }}>Send quote</button>
             <button onClick={() => actions.viewQuote(quote.id)} className="px-4 py-2.5 rounded-full text-sm font-medium" style={{ background: "#edf2f5", color: C.blue }}>Mark viewed</button>
-            <button disabled={quote.status === "accepted"} onClick={() => actions.acceptQuote(quote.id)} className="px-4 py-2.5 rounded-full text-sm font-medium disabled:opacity-100" style={{ background: quote.status === "accepted" ? C.forest : "#eaf1ee", color: quote.status === "accepted" ? "#fff" : C.forest }}>{quote.status === "accepted" ? "Accepted" : "Accept"}</button>
+            <button disabled={quote.status === "accepted"} onClick={() => { actions.acceptQuote(quote.id); setPage("contracts"); }} className="px-4 py-2.5 rounded-full text-sm font-medium disabled:opacity-100" style={{ background: quote.status === "accepted" ? C.forest : "#eaf1ee", color: quote.status === "accepted" ? "#fff" : C.forest }}>{quote.status === "accepted" ? "Accepted" : "Accept + prep next steps"}</button>
             <button disabled={quote.status === "accepted"} onClick={() => actions.declineQuote(quote.id)} className="px-4 py-2.5 rounded-full text-sm font-medium disabled:opacity-40" style={{ background: "#f8ece8", color: C.red }}>Decline</button>
             {quote.status === "accepted" && (
-              <button onClick={() => setPage("contracts")} className="px-4 py-2.5 rounded-full text-sm font-medium flex items-center gap-1" style={{ background: C.charcoal, color: "#fff" }}>
+              <button onClick={() => { if (!selectedBundle.primaryContract) actions.createContract(selectedBundle.client.id); setPage("contracts"); }} className="px-4 py-2.5 rounded-full text-sm font-medium flex items-center gap-1" style={{ background: C.charcoal, color: "#fff" }}>
                 {selectedBundle.primaryContract ? "View contract" : "Generate contract"} <ChevronRight size={12} />
               </button>
             )}
@@ -2151,7 +2151,7 @@ EC Creative Studios` };
 function Modal({ onClose, title, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto ecc-scrollbar rounded-2xl p-6" style={{ background: "#fff" }} onClick={(event) => event.stopPropagation()}>
+      <div className="ecc-modal-panel w-full max-w-lg max-h-[85vh] overflow-y-auto ecc-scrollbar rounded-2xl p-6" style={{ background: "#fff" }} onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>{title}</p>
           <button onClick={onClose}><X size={18} color={C.charcoal} /></button>

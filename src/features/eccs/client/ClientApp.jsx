@@ -59,21 +59,21 @@ export default function ClientApp({ state, selectedBundle, actions }) {
   }
 
   return (
-    <div className="flex" style={{ minHeight: "calc(100vh - 44px)" }}>
+    <div className="ecc-app-shell flex">
       <aside className="hidden md:flex md:flex-col w-64 shrink-0 px-4 py-6" style={{ background: C.charcoal }}>
         <PortalSidebar page={page} setPage={setPage} clientName={selectedBundle.client.name} sessionType={selectedBundle.client.sessionType} />
       </aside>
 
       {drawer && (
-        <div className="fixed inset-0 z-40 flex md:hidden">
-          <div className="w-64 px-4 py-6 overflow-y-auto" style={{ background: C.charcoal }}>
+        <div className="ecc-mobile-overlay fixed inset-0 z-40 flex md:hidden">
+          <div className="ecc-mobile-drawer w-64 px-4 py-6 overflow-y-auto" style={{ background: C.charcoal }}>
             <PortalSidebar page={page} setPage={(nextPage) => { setPage(nextPage); setDrawer(false); }} clientName={selectedBundle.client.name} sessionType={selectedBundle.client.sessionType} />
           </div>
           <div className="flex-1" style={{ background: "rgba(0,0,0,0.35)" }} onClick={() => setDrawer(false)} />
         </div>
       )}
 
-      <main className="flex-1 min-w-0 pb-20 md:pb-0">
+      <main className="ecc-mobile-main flex-1 min-w-0 md:pb-0">
         <div className="flex items-center gap-3 px-4 sm:px-6 py-4" style={{ borderBottom: `1px solid ${C.line}` }}>
           <button className="md:hidden" onClick={() => setDrawer(true)}>
             <Menu size={20} color={C.ink} />
@@ -96,7 +96,7 @@ export default function ClientApp({ state, selectedBundle, actions }) {
         </div>
       </main>
 
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex justify-around py-2" style={{ background: "#fff", borderTop: `1px solid ${C.line}` }}>
+      <div className="ecc-mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 z-30 flex justify-around" style={{ background: "#fff", borderTop: `1px solid ${C.line}` }}>
         {BOTTOM_NAV.map((item) => {
           const Icon = item.icon;
           const active = item.key === "__more" ? drawer : page === item.key;
@@ -362,7 +362,7 @@ function ClientQuoteOptionGroup({ quote, group, actions, locked }) {
 function ClientModal({ onClose, title, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto ecc-scrollbar rounded-2xl p-6" style={{ background: "#fff" }} onClick={(event) => event.stopPropagation()}>
+      <div className="ecc-modal-panel w-full max-w-lg max-h-[85vh] overflow-y-auto ecc-scrollbar rounded-2xl p-6" style={{ background: "#fff" }} onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>{title}</p>
           <button onClick={onClose}><X size={18} color={C.charcoal} /></button>

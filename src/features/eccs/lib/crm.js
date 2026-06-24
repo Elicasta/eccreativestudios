@@ -1407,13 +1407,82 @@ export function crmReducer(state, action) {
       const [status, dateField, text] = statusMap[action.type];
       const quote = state.quotes.find((entry) => entry.id === action.quoteId);
       if (!quote) return state;
+
+      const updatedQuote = { ...quote, status, [dateField]: dayStamp(), locked: action.type === "send_quote" ? true : quote.locked };
+      let nextState = {
+        ...state,
+        selectedClientId: quote.clientId,
+        quotes: state.quotes.map((entry) => (entry.id === action.quoteId ? updatedQuote : entry)),
+      };
+
+      if (action.type === "accept_quote") {
+        const bundle = getClientBundle(nextState, quote.clientId);
+        const client = bundle.client;
+        const existingContract = bundle.contracts.find((entry) => activeContractStatuses.includes(entry.status));
+        const contract = existingContract || {
+          id: nextId("contract"),
+          number: `CON-${1000 + nextState.contracts.length + 1}`,
+          clientId: quote.clientId,
+          quoteId: quote.id,
+          templateName: "Portrait Session Agreement",
+          status: "draft",
+          createdAt: dayStamp(),
+          sentAt: "",
+          signedAt: "",
+          signerName: "",
+          clauses: DEFAULT_CONTRACT_CLAUSES.map((clause) => ({ ...clause })),
+        };
+
+        const existingDepositInvoice = bundle.invoices.find(
+          (entry) => entry.kind === "deposit" && activeInvoiceStatuses.includes(entry.status),
+        );
+        const depositAmount = money(Math.round(updatedQuote.total * 0.5));
+        const depositInvoice = existingDepositInvoice || recalcInvoice({
+          id: nextId("invoice"),
+          number: `INV-${1000 + nextState.invoices.length + 1}`,
+          kind: "deposit",
+          clientId: quote.clientId,
+          quoteId: quote.id,
+          contractId: contract.id,
+          sessionId: bundle.session?.id || null,
+          status: "draft",
+          lineItems: buildInvoiceItems("Deposit to secure session", depositAmount),
+          tax: 0,
+          amountPaid: 0,
+          dueDate: "",
+          createdAt: dayStamp(),
+          sentAt: "",
+          paidAt: "",
+          paymentMethod: "",
+          internalNotes: "Prepared automatically when quote was accepted.",
+          locked: false,
+        });
+
+        nextState = {
+          ...nextState,
+          contracts: existingContract ? nextState.contracts : [contract, ...nextState.contracts],
+          invoices: existingDepositInvoice ? nextState.invoices : [depositInvoice, ...nextState.invoices],
+          sessions: nextState.sessions.map((entry) => {
+            if (entry.clientId !== quote.clientId) return entry;
+            return {
+              ...entry,
+              contractId: entry.contractId || contract.id,
+              invoiceIds: Array.from(new Set([...(entry.invoiceIds || []), depositInvoice.id])),
+              status: entry.status === "inquiry" || entry.status === "quote_pending" ? "contract_pending" : entry.status,
+              prepStatus: entry.prepStatus === "awaiting_quote" || entry.prepStatus === "quote_sent" ? "awaiting_contract" : entry.prepStatus,
+            };
+          }),
+        };
+
+        return withActivity(
+          nextState,
+          client?.name || "Client",
+          `${quote.number} accepted. Contract and deposit invoice prepared.`,
+        );
+      }
+
       return withActivity(
-        {
-          ...state,
-          quotes: state.quotes.map((entry) =>
-            entry.id === action.quoteId ? { ...entry, status, [dateField]: dayStamp(), locked: action.type === "send_quote" ? true : entry.locked } : entry,
-          ),
-        },
+        nextState,
         getClientBundle(state, quote.clientId).client?.name || "Client",
         `${quote.number} ${text.toLowerCase()}`,
       );

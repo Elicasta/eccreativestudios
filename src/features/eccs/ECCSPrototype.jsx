@@ -315,6 +315,7 @@ export default function ECCSPrototype() {
         app={app}
         setApp={setApp}
         stageLabel={selectedBundle.client ? PIPELINE_LABELS[selectedBundle.stage] : "No client selected"}
+        onManualOverride={() => setOverrideOpen(true)}
       />
 
       {app === "admin" ? (
