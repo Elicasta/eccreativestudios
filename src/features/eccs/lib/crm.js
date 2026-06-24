@@ -1248,6 +1248,11 @@ export function crmReducer(state, action) {
     case "delete_quote": {
       const quote = state.quotes.find((entry) => entry.id === action.quoteId);
       if (!quote) return state;
+      // Don't allow a delete that would leave a contract pointing at a quote that no
+      // longer exists. The UI should check this first and tell the person why; this is
+      // the backstop so a dangling reference can never reach the data layer.
+      const dependentContract = state.contracts.find((entry) => entry.quoteId === action.quoteId);
+      if (dependentContract) return state;
       const bundle = getClientBundle(state, quote.clientId);
       return withActivity(
         {
@@ -2068,6 +2073,10 @@ export function crmReducer(state, action) {
     case "delete_contract": {
       const contract = state.contracts.find((entry) => entry.id === action.contractId);
       if (!contract) return state;
+      // Same dangling-reference guard as delete_quote: don't delete a contract that an
+      // invoice already points to.
+      const dependentInvoice = state.invoices.find((entry) => entry.contractId === action.contractId);
+      if (dependentInvoice) return state;
       const bundle = getClientBundle(state, contract.clientId);
       return withActivity(
         {

@@ -318,12 +318,20 @@ export default function ECCSPrototype() {
       />
 
       {app === "admin" ? (
-        <AdminApp state={state} selectedBundle={selectedBundle} actions={actions} setApp={setApp} />
+        <AdminApp
+          state={state}
+          selectedBundle={selectedBundle}
+          actions={actions}
+          setApp={setApp}
+          openManualOverride={() => setOverrideOpen(true)}
+        />
       ) : (
         <ClientApp state={state} selectedBundle={selectedBundle} actions={actions} setApp={setApp} />
       )}
 
-      <ManualOverride open={overrideOpen} setOpen={setOverrideOpen} selectedBundle={selectedBundle} actions={actions} />
+      {app === "admin" && (
+        <ManualOverride open={overrideOpen} setOpen={setOverrideOpen} selectedBundle={selectedBundle} actions={actions} />
+      )}
     </div>
   );
 }
