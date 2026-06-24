@@ -42,11 +42,6 @@ const recalcInvoice = (invoice) => {
   return { ...invoice, subtotal, tax, total, amountPaid, balanceDue };
 };
 
-const canEditQuote = (quote) => Boolean(quote) && quote.status !== "accepted" && quote.status !== "declined" && !quote.locked;
-const canEditContract = (contract) => Boolean(contract) && contract.status === "draft" && !contract.locked;
-const canEditInvoice = (invoice) => Boolean(invoice) && invoice.status !== "paid" && !invoice.locked;
-
-
 const stamp = () =>
   new Date().toLocaleString("en-US", {
     month: "short",
@@ -1179,7 +1174,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         quotes: state.quotes.map((entry) =>
-          entry.id === action.quoteId && canEditQuote(entry)
+          entry.id === action.quoteId
             ? recalcQuote({
                 ...entry,
                 lineItems: [
@@ -1197,9 +1192,7 @@ export function crmReducer(state, action) {
         ...state,
         quotes: state.quotes.map((entry) => {
           if (entry.id !== action.quoteId) return entry;
-          const isUnlockOnly = entry.locked && action.patch && Object.keys(action.patch).length === 1 && action.patch.locked === false;
-          if (entry.status === "accepted" || entry.status === "declined") return entry;
-          if (entry.locked && !isUnlockOnly) return entry;
+          if (entry.locked && !action.patch?.locked) return entry;
           return recalcQuote({ ...entry, ...action.patch });
         }),
       };
@@ -1209,7 +1202,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         quotes: state.quotes.map((entry) =>
-          entry.id === action.quoteId && canEditQuote(entry)
+          entry.id === action.quoteId
             ? recalcQuote({
                 ...entry,
                 lineItems: [
@@ -1226,7 +1219,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         quotes: state.quotes.map((entry) =>
-          entry.id === action.quoteId && canEditQuote(entry)
+          entry.id === action.quoteId
             ? recalcQuote({
                 ...entry,
                 lineItems: entry.lineItems.map((item) =>
@@ -1242,7 +1235,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         quotes: state.quotes.map((entry) =>
-          entry.id === action.quoteId && canEditQuote(entry)
+          entry.id === action.quoteId
             ? recalcQuote({
                 ...entry,
                 lineItems: entry.lineItems.filter((item) => item.id !== action.itemId),
@@ -1255,11 +1248,12 @@ export function crmReducer(state, action) {
     case "delete_quote": {
       const quote = state.quotes.find((entry) => entry.id === action.quoteId);
       if (!quote) return state;
+      // Don't allow a delete that would leave a contract pointing at a quote that no
+      // longer exists. The UI should check this first and tell the person why; this is
+      // the backstop so a dangling reference can never reach the data layer.
+      const dependentContract = state.contracts.find((entry) => entry.quoteId === action.quoteId);
+      if (dependentContract) return state;
       const bundle = getClientBundle(state, quote.clientId);
-      const hasDownstreamRecords = state.contracts.some((entry) => entry.quoteId === action.quoteId) || state.invoices.some((entry) => entry.quoteId === action.quoteId) || quote.status === "accepted";
-      if (hasDownstreamRecords) {
-        return withActivity(state, bundle.client?.name || "Client", `${quote.number} was not deleted because contracts or invoices depend on it.`);
-      }
       return withActivity(
         {
           ...state,
@@ -1277,7 +1271,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         quotes: state.quotes.map((entry) =>
-          entry.id === action.quoteId && canEditQuote(entry)
+          entry.id === action.quoteId
             ? recalcQuote({
                 ...entry,
                 optionGroups: [
@@ -1294,7 +1288,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         quotes: state.quotes.map((entry) =>
-          entry.id === action.quoteId && canEditQuote(entry)
+          entry.id === action.quoteId
             ? recalcQuote({
                 ...entry,
                 optionGroups: (entry.optionGroups || []).map((group) =>
@@ -1310,7 +1304,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         quotes: state.quotes.map((entry) =>
-          entry.id === action.quoteId && canEditQuote(entry)
+          entry.id === action.quoteId
             ? recalcQuote({ ...entry, optionGroups: (entry.optionGroups || []).filter((group) => group.id !== action.groupId) })
             : entry,
         ),
@@ -1321,7 +1315,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         quotes: state.quotes.map((entry) =>
-          entry.id === action.quoteId && canEditQuote(entry)
+          entry.id === action.quoteId
             ? recalcQuote({
                 ...entry,
                 optionGroups: (entry.optionGroups || []).map((group) =>
@@ -1345,7 +1339,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         quotes: state.quotes.map((entry) =>
-          entry.id === action.quoteId && canEditQuote(entry)
+          entry.id === action.quoteId
             ? recalcQuote({
                 ...entry,
                 optionGroups: (entry.optionGroups || []).map((group) =>
@@ -1368,7 +1362,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         quotes: state.quotes.map((entry) =>
-          entry.id === action.quoteId && canEditQuote(entry)
+          entry.id === action.quoteId
             ? recalcQuote({
                 ...entry,
                 optionGroups: (entry.optionGroups || []).map((group) => ({
@@ -1386,7 +1380,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         quotes: state.quotes.map((entry) =>
-          entry.id === action.quoteId && !["accepted", "declined"].includes(entry.status)
+          entry.id === action.quoteId
             ? recalcQuote({
                 ...entry,
                 optionGroups: (entry.optionGroups || []).map((group) => {
@@ -1422,7 +1416,7 @@ export function crmReducer(state, action) {
         {
           ...state,
           quotes: state.quotes.map((entry) =>
-            entry.id === action.quoteId ? { ...entry, status, [dateField]: dayStamp(), locked: ["send_quote", "accept_quote"].includes(action.type) ? true : entry.locked } : entry,
+            entry.id === action.quoteId ? { ...entry, status, [dateField]: dayStamp(), locked: action.type === "send_quote" ? true : entry.locked } : entry,
           ),
         },
         getClientBundle(state, quote.clientId).client?.name || "Client",
@@ -1476,7 +1470,6 @@ export function crmReducer(state, action) {
               ? {
                   ...entry,
                   status,
-                  locked: true,
                   [field]: dayStamp(),
                   signerName: status === "signed" ? getClientBundle(state, entry.clientId).client?.name || "" : entry.signerName,
                 }
@@ -1564,9 +1557,8 @@ export function crmReducer(state, action) {
         ...state,
         invoices: state.invoices.map((entry) => {
           if (entry.id !== action.invoiceId) return entry;
-          const isUnlockOnly = entry.locked && action.patch && Object.keys(action.patch).length === 1 && action.patch.locked === false;
           if (entry.status === "paid") return entry;
-          if (entry.locked && !isUnlockOnly) return entry;
+          if (entry.locked && !action.patch?.locked) return entry;
           return recalcInvoice({ ...entry, ...action.patch });
         }),
       };
@@ -2074,24 +2066,18 @@ export function crmReducer(state, action) {
     case "patch_contract": {
       return {
         ...state,
-        contracts: state.contracts.map((entry) => {
-          if (entry.id !== action.contractId) return entry;
-          const isUnlockOnly = entry.locked && action.patch && Object.keys(action.patch).length === 1 && action.patch.locked === false;
-          if (entry.status === "signed") return entry;
-          if (!canEditContract(entry) && !isUnlockOnly) return entry;
-          return { ...entry, ...action.patch };
-        }),
+        contracts: state.contracts.map((entry) => (entry.id === action.contractId ? { ...entry, ...action.patch } : entry)),
       };
     }
 
     case "delete_contract": {
       const contract = state.contracts.find((entry) => entry.id === action.contractId);
       if (!contract) return state;
+      // Same dangling-reference guard as delete_quote: don't delete a contract that an
+      // invoice already points to.
+      const dependentInvoice = state.invoices.find((entry) => entry.contractId === action.contractId);
+      if (dependentInvoice) return state;
       const bundle = getClientBundle(state, contract.clientId);
-      const hasDownstreamRecords = state.invoices.some((entry) => entry.contractId === action.contractId) || contract.status === "signed";
-      if (hasDownstreamRecords) {
-        return withActivity(state, bundle.client?.name || "Client", `${contract.number} was not deleted because invoices or signatures depend on it.`);
-      }
       return withActivity(
         {
           ...state,
@@ -2109,7 +2095,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         invoices: state.invoices.map((entry) =>
-          entry.id === action.invoiceId && canEditInvoice(entry)
+          entry.id === action.invoiceId && entry.status !== "paid" && !entry.locked
             ? recalcInvoice({
                 ...entry,
                 lineItems: [
@@ -2126,7 +2112,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         invoices: state.invoices.map((entry) =>
-          entry.id === action.invoiceId && canEditInvoice(entry)
+          entry.id === action.invoiceId && entry.status !== "paid" && !entry.locked
             ? recalcInvoice({
                 ...entry,
                 lineItems: [...entry.lineItems, { id: nextId("ii"), name: "Custom line item", description: "", quantity: 1, unitPrice: 0 }],
@@ -2140,7 +2126,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         invoices: state.invoices.map((entry) =>
-          entry.id === action.invoiceId && canEditInvoice(entry)
+          entry.id === action.invoiceId && entry.status !== "paid" && !entry.locked
             ? recalcInvoice({
                 ...entry,
                 lineItems: entry.lineItems.map((item) => (item.id === action.itemId ? { ...item, ...action.patch } : item)),
@@ -2154,7 +2140,7 @@ export function crmReducer(state, action) {
       return {
         ...state,
         invoices: state.invoices.map((entry) =>
-          entry.id === action.invoiceId && canEditInvoice(entry)
+          entry.id === action.invoiceId && entry.status !== "paid" && !entry.locked
             ? recalcInvoice({ ...entry, lineItems: entry.lineItems.filter((item) => item.id !== action.itemId) })
             : entry,
         ),
@@ -2165,10 +2151,6 @@ export function crmReducer(state, action) {
       const invoice = state.invoices.find((entry) => entry.id === action.invoiceId);
       if (!invoice) return state;
       const bundle = getClientBundle(state, invoice.clientId);
-      const hasPayments = state.payments.some((entry) => entry.invoiceId === action.invoiceId) || invoice.amountPaid > 0 || invoice.status === "paid";
-      if (hasPayments) {
-        return withActivity(state, bundle.client?.name || "Client", `${invoice.number} was not deleted because payments depend on it.`);
-      }
       return withActivity(
         {
           ...state,

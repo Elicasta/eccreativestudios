@@ -1,17 +1,20 @@
 "use client";
 
 import React from "react";
-import { AlertTriangle, Archive, Check, X } from "lucide-react";
+import { AlertTriangle, Archive, Check, SlidersHorizontal, X } from "lucide-react";
 import { C } from "../lib/brand";
 import { FORCE_STAGE_ORDER, PIPELINE_LABELS } from "../lib/crm";
 
+// Controlled modal only — no floating trigger button. The entry point lives inline
+// near the relevant project/session/date-selection UI (see ManualOverrideTrigger below)
+// so it's available without dominating the page or covering content on mobile.
 export default function ManualOverride({ open, setOpen, selectedBundle, actions }) {
   const client = selectedBundle?.client || null;
 
   return (
     <>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 safe-modal" style={{ background: "rgba(0,0,0,0.4)" }}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ background: "rgba(0,0,0,0.4)" }}>
           <div className="w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 max-h-[85vh] overflow-y-auto" style={{ background: "#fff" }}>
             <div className="flex items-center justify-between mb-1">
               <p className="ecc-display text-xl" style={{ color: C.ink }}>Manual Override</p>
@@ -27,7 +30,7 @@ export default function ManualOverride({ open, setOpen, selectedBundle, actions 
                 <p className="text-xs mb-4" style={{ color: C.charcoal }}>
                   For when a client pays by Zelle, signs in person, or anything else happens off-platform. This creates whatever
                   real quote/contract/invoice/session records are missing to get <strong>{client.name}</strong> to the stage you pick —
-                  it doesn't fake a number, it builds the records.
+                  it doesn&apos;t fake a number, it builds the records.
                 </p>
                 <div className="space-y-1.5 mb-4">
                   {FORCE_STAGE_ORDER.map((key) => {
@@ -73,7 +76,7 @@ export default function ManualOverride({ open, setOpen, selectedBundle, actions 
                   </button>
                 </div>
                 <p className="text-[11px] mb-3" style={{ color: C.taupe }}>
-                  Override moves a client forward only — it won't unsign a contract or unpay an invoice. For that, edit the record directly.
+                  Override moves a client forward only — it won&apos;t unsign a contract or unpay an invoice. For that, edit the record directly.
                 </p>
               </>
             )}
@@ -89,5 +92,19 @@ export default function ManualOverride({ open, setOpen, selectedBundle, actions 
         </div>
       )}
     </>
+  );
+}
+
+// Secondary, inline entry point. Place this near the top of project/session/date-selection
+// areas instead of a floating button — it should read as optional, not as the default action.
+export function ManualOverrideTrigger({ onClick, className = "" }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium shrink-0 ${className}`}
+      style={{ border: `1px solid ${C.line}`, color: C.charcoal }}
+    >
+      <SlidersHorizontal size={13} /> Manual Override
+    </button>
   );
 }

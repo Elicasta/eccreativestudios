@@ -1,5 +1,7 @@
-import ECCSPrototype from "@/features/eccs/ECCSPrototype";
+import ClientOnlyApp from "./ClientOnlyApp";
+
+export const dynamic = "force-dynamic";
 
 export default function Page() {
-  return <ECCSPrototype />;
+  return <ClientOnlyApp />;
 }
