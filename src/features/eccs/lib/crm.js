@@ -323,6 +323,28 @@ const defaultContractTemplates = [
   "Milestone Package Agreement",
 ];
 
+export const DEFAULT_NOTIFICATION_SETTINGS = {
+  enabled: false,
+  permission: "default",
+  deliveryMode: "local",
+  lastPermissionCheckedAt: "",
+  categories: {
+    messages: true,
+    inquiries: true,
+    quotes: true,
+    contracts: true,
+    invoices: true,
+    payments: true,
+    sessions: true,
+  },
+  quietHours: {
+    enabled: false,
+    start: "21:00",
+    end: "08:00",
+  },
+  devices: [],
+};
+
 export function createInitialState() {
   const inquiryDanielId = "inq_daniel";
   const inquirySarahId = "inq_sarah";
@@ -450,6 +472,8 @@ export function createInitialState() {
     quoteTemplates: ["Blank Quote", "Maternity Template", "Newborn Template", "Family Template", "Branding Template", "Wedding Template", "Event Template"],
     portalDefaults: defaultPortalSteps,
     calendarConnections: { google: false, apple: false },
+    notificationSettings: DEFAULT_NOTIFICATION_SETTINGS,
+    notificationEvents: [],
     availabilityLastEditedAt: "Jun 22, 2026 at 4:15 PM",
     inquiries: [
       {
@@ -2459,6 +2483,63 @@ export function crmReducer(state, action) {
 
     case "update_calendar_connection": {
       return { ...state, calendarConnections: { ...(state.calendarConnections || {}), [action.provider]: action.connected } };
+    }
+
+    case "update_notification_settings": {
+      return {
+        ...state,
+        notificationSettings: {
+          ...DEFAULT_NOTIFICATION_SETTINGS,
+          ...(state.notificationSettings || {}),
+          ...(action.patch || {}),
+          categories: {
+            ...DEFAULT_NOTIFICATION_SETTINGS.categories,
+            ...(state.notificationSettings?.categories || {}),
+            ...(action.patch?.categories || {}),
+          },
+          quietHours: {
+            ...DEFAULT_NOTIFICATION_SETTINGS.quietHours,
+            ...(state.notificationSettings?.quietHours || {}),
+            ...(action.patch?.quietHours || {}),
+          },
+          devices: action.patch?.devices || state.notificationSettings?.devices || [],
+        },
+      };
+    }
+
+    case "register_notification_device": {
+      const existingDevices = state.notificationSettings?.devices || [];
+      const device = {
+        id: action.device?.id || nextId("device"),
+        name: action.device?.name || "This browser",
+        platform: action.device?.platform || "Browser",
+        mode: action.device?.mode || "local",
+        permission: action.device?.permission || "default",
+        endpoint: action.device?.endpoint || "",
+        registeredAt: action.device?.registeredAt || stamp(),
+      };
+      const devices = [device, ...existingDevices.filter((entry) => entry.id !== device.id)];
+      return {
+        ...state,
+        notificationSettings: {
+          ...DEFAULT_NOTIFICATION_SETTINGS,
+          ...(state.notificationSettings || {}),
+          devices,
+          permission: device.permission,
+          lastPermissionCheckedAt: stamp(),
+        },
+      };
+    }
+
+    case "remove_notification_device": {
+      return {
+        ...state,
+        notificationSettings: {
+          ...DEFAULT_NOTIFICATION_SETTINGS,
+          ...(state.notificationSettings || {}),
+          devices: (state.notificationSettings?.devices || []).filter((device) => device.id !== action.deviceId),
+        },
+      };
     }
 
     default:

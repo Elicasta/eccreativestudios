@@ -41,7 +41,7 @@ const BOTTOM_NAV = [
   { key: "overview", label: "Home", icon: Home },
   { key: "documents", label: "Docs", icon: FileText },
   { key: "messages", label: "Messages", icon: MessageCircle },
-  { key: "payments", label: "Payments", icon: CreditCard },
+  { key: "__more", label: "More", icon: Menu },
 ];
 
 const SLOT_OPTIONS = [
@@ -99,9 +99,13 @@ export default function ClientApp({ state, selectedBundle, actions }) {
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex justify-around py-2" style={{ background: "#fff", borderTop: `1px solid ${C.line}` }}>
         {BOTTOM_NAV.map((item) => {
           const Icon = item.icon;
-          const active = page === item.key;
+          const active = item.key === "__more" ? drawer : page === item.key;
           return (
-            <button key={item.key} onClick={() => setPage(item.key)} className="flex flex-col items-center gap-0.5 px-2">
+            <button
+              key={item.key}
+              onClick={() => (item.key === "__more" ? setDrawer(true) : setPage(item.key))}
+              className="flex flex-col items-center gap-0.5 px-2"
+            >
               <Icon size={18} color={active ? C.forest : C.taupe} />
               <span className="text-[10px]" style={{ color: active ? C.forest : C.taupe }}>{item.label}</span>
             </button>

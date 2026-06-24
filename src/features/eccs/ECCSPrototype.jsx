@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useReducer, useState } from "react";
 import { C } from "./lib/brand";
-import { createInitialState, crmReducer, getClientBundle, PIPELINE_LABELS } from "./lib/crm";
+import { createInitialState, crmReducer, getClientBundle, PIPELINE_LABELS, DEFAULT_NOTIFICATION_SETTINGS } from "./lib/crm";
 import { FontLoad } from "./components/ui";
 import TopSwitcher from "./components/TopSwitcher";
 import ManualOverride from "./components/ManualOverride";
@@ -10,6 +10,168 @@ import AdminApp from "./admin/AdminApp";
 import ClientApp from "./client/ClientApp";
 
 const STORAGE_KEY = "eccs-crm-v7";
+
+const PUSH_SENT_KEY = "eccs-crm-push-sent-v1";
+const PUSH_BOOTSTRAP_KEY = "eccs-crm-push-bootstrapped-v1";
+
+function normalizeNotificationSettings(settings) {
+  return {
+    ...DEFAULT_NOTIFICATION_SETTINGS,
+    ...(settings || {}),
+    categories: {
+      ...DEFAULT_NOTIFICATION_SETTINGS.categories,
+      ...(settings?.categories || {}),
+    },
+    quietHours: {
+      ...DEFAULT_NOTIFICATION_SETTINGS.quietHours,
+      ...(settings?.quietHours || {}),
+    },
+    devices: Array.isArray(settings?.devices) ? settings.devices : [],
+  };
+}
+
+function parseClockMinutes(value = "") {
+  const [hour = "0", minute = "0"] = String(value).split(":");
+  return Number(hour) * 60 + Number(minute);
+}
+
+function isInsideQuietHours(quietHours = {}) {
+  if (!quietHours.enabled) return false;
+  const now = new Date();
+  const current = now.getHours() * 60 + now.getMinutes();
+  const start = parseClockMinutes(quietHours.start || "21:00");
+  const end = parseClockMinutes(quietHours.end || "08:00");
+  if (start === end) return false;
+  if (start < end) return current >= start && current < end;
+  return current >= start || current < end;
+}
+
+function notificationTriggersFromState(state) {
+  const clients = Array.isArray(state.clients) ? state.clients : [];
+  const clientName = (clientId) => clients.find((client) => client.id === clientId)?.name || "EC Creative Studios";
+  const messages = Array.isArray(state.messages) ? state.messages : [];
+  const inquiries = Array.isArray(state.inquiries) ? state.inquiries : [];
+  const quotes = Array.isArray(state.quotes) ? state.quotes : [];
+  const contracts = Array.isArray(state.contracts) ? state.contracts : [];
+  const invoices = Array.isArray(state.invoices) ? state.invoices : [];
+  const sessions = Array.isArray(state.sessions) ? state.sessions : [];
+
+  return [
+    ...messages
+      .filter((message) => message.from === "client" && !message.readAt)
+      .map((message) => ({
+        id: `message:${message.id}`,
+        category: "messages",
+        title: `New message from ${clientName(message.clientId)}`,
+        body: message.text || "Open the CRM to reply.",
+        url: "/",
+      })),
+    ...inquiries
+      .filter((inquiry) => ["new", "follow_up"].includes(inquiry.status))
+      .map((inquiry) => ({
+        id: `inquiry:${inquiry.id}:${inquiry.status}`,
+        category: "inquiries",
+        title: inquiry.status === "follow_up" ? "Inquiry needs follow-up" : "New inquiry received",
+        body: `${inquiry.name || "A client"} · ${inquiry.sessionType || "Session"}`,
+        url: "/",
+      })),
+    ...quotes
+      .filter((quote) => ["viewed", "accepted", "declined"].includes(quote.status))
+      .map((quote) => ({
+        id: `quote:${quote.id}:${quote.status}`,
+        category: "quotes",
+        title: quote.status === "accepted" ? "Quote accepted" : quote.status === "declined" ? "Quote declined" : "Quote viewed",
+        body: `${clientName(quote.clientId)} · ${quote.number || "Quote"}`,
+        url: "/",
+      })),
+    ...contracts
+      .filter((contract) => ["sent", "signed"].includes(contract.status))
+      .map((contract) => ({
+        id: `contract:${contract.id}:${contract.status}`,
+        category: "contracts",
+        title: contract.status === "signed" ? "Contract signed" : "Contract still pending",
+        body: `${clientName(contract.clientId)} · ${contract.number || "Contract"}`,
+        url: "/",
+      })),
+    ...invoices
+      .filter((invoice) => ["sent", "partially_paid", "paid"].includes(invoice.status))
+      .map((invoice) => ({
+        id: `invoice:${invoice.id}:${invoice.status}:${invoice.balanceDue}`,
+        category: invoice.status === "paid" ? "payments" : "invoices",
+        title: invoice.status === "paid" ? "Invoice paid" : "Open invoice",
+        body: `${clientName(invoice.clientId)} · ${invoice.number || "Invoice"}${invoice.balanceDue ? ` · $${Number(invoice.balanceDue).toLocaleString()} due` : ""}`,
+        url: "/",
+      })),
+    ...sessions
+      .filter((session) => session.status === "scheduled" && session.sessionDate)
+      .map((session) => ({
+        id: `session:${session.id}:${session.sessionDate}:${session.sessionTime}`,
+        category: "sessions",
+        title: "Session scheduled",
+        body: `${clientName(session.clientId)} · ${session.sessionDate}${session.sessionTime ? ` at ${session.sessionTime}` : ""}`,
+        url: "/",
+      })),
+  ];
+}
+
+function PushNotificationBridge({ state }) {
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const settings = normalizeNotificationSettings(state.notificationSettings);
+    const triggers = notificationTriggersFromState(state).filter((trigger) => settings.categories?.[trigger.category] !== false);
+    const currentIds = triggers.map((trigger) => trigger.id);
+
+    try {
+      if (!window.localStorage.getItem(PUSH_BOOTSTRAP_KEY)) {
+        window.localStorage.setItem(PUSH_SENT_KEY, JSON.stringify(currentIds));
+        window.localStorage.setItem(PUSH_BOOTSTRAP_KEY, "1");
+        return;
+      }
+    } catch {
+      return;
+    }
+
+    if (!settings.enabled || settings.permission !== "granted" || !("Notification" in window) || Notification.permission !== "granted") return;
+    if (isInsideQuietHours(settings.quietHours)) return;
+
+    let sentIds = [];
+    try {
+      sentIds = JSON.parse(window.localStorage.getItem(PUSH_SENT_KEY) || "[]");
+    } catch {
+      sentIds = [];
+    }
+    const sent = new Set(sentIds);
+    const next = triggers.filter((trigger) => !sent.has(trigger.id));
+    if (!next.length) return;
+
+    next.slice(0, 3).forEach((trigger) => {
+      sent.add(trigger.id);
+      const payload = {
+        body: trigger.body,
+        tag: trigger.id,
+        badge: "/icons/icon-192.png",
+        icon: "/icons/icon-192.png",
+        data: { url: trigger.url || "/" },
+      };
+      navigator.serviceWorker.ready
+        .then((registration) => registration.showNotification(trigger.title, payload))
+        .catch(() => new Notification(trigger.title, payload));
+    });
+
+    try {
+      window.localStorage.setItem(PUSH_SENT_KEY, JSON.stringify(Array.from(sent).slice(-200)));
+    } catch {
+      // Ignore storage failures. Notifications are a convenience layer.
+    }
+  }, [state]);
+
+  return null;
+}
 
 function initState() {
   const fresh = createInitialState();
@@ -35,6 +197,8 @@ function initState() {
       quoteTemplates: stored.quoteTemplates?.length ? stored.quoteTemplates : fresh.quoteTemplates,
       portalDefaults: stored.portalDefaults?.length ? stored.portalDefaults : fresh.portalDefaults,
       calendarConnections: stored.calendarConnections || fresh.calendarConnections,
+      notificationSettings: normalizeNotificationSettings(stored.notificationSettings || fresh.notificationSettings),
+      notificationEvents: Array.isArray(stored.notificationEvents) ? stored.notificationEvents : fresh.notificationEvents,
       availabilityLastEditedAt: stored.availabilityLastEditedAt || fresh.availabilityLastEditedAt,
       portalProfiles: (stored.portalProfiles || fresh.portalProfiles).map((profile) => ({
         ...profile,
@@ -132,6 +296,9 @@ export default function ECCSPrototype() {
       updateLocation: (locationId, patch) => dispatch({ type: "update_location", locationId, patch }),
       removeLocation: (locationId) => dispatch({ type: "remove_location", locationId }),
       updateCalendarConnection: (provider, connected) => dispatch({ type: "update_calendar_connection", provider, connected }),
+      updateNotificationSettings: (patch) => dispatch({ type: "update_notification_settings", patch }),
+      registerNotificationDevice: (device) => dispatch({ type: "register_notification_device", device }),
+      removeNotificationDevice: (deviceId) => dispatch({ type: "remove_notification_device", deviceId }),
       deleteQuote: (quoteId) => dispatch({ type: "delete_quote", quoteId }),
       deleteContract: (contractId) => dispatch({ type: "delete_contract", contractId }),
       deleteInvoice: (invoiceId) => dispatch({ type: "delete_invoice", invoiceId }),
@@ -143,6 +310,7 @@ export default function ECCSPrototype() {
   return (
     <div className="ecc-body min-h-screen" style={{ background: C.bg }}>
       <FontLoad />
+      <PushNotificationBridge state={state} />
       <TopSwitcher
         app={app}
         setApp={setApp}

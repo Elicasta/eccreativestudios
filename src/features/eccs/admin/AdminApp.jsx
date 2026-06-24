@@ -165,7 +165,7 @@ export default function AdminApp({ state, selectedBundle, actions, setApp }) {
           canGoBack={backStack.length > 0}
           onQuickCreate={() => setQuickCreateOpen(true)}
         />
-        <div className="p-4 sm:p-6 lg:p-8 max-w-[1520px] mx-auto space-y-5">
+        <div className={`px-4 pb-4 sm:px-6 sm:pb-6 lg:px-8 lg:pb-8 max-w-[1520px] mx-auto space-y-5 ${page === "activity" ? "pt-2 sm:pt-4" : "pt-4 sm:pt-6 lg:pt-8"}`}>
           {page === "dashboard" && (
             <DashboardPage
               state={state}
@@ -3674,25 +3674,36 @@ function ActivityPage({ state, selectedBundle, actions, setPage }) {
     { key: "notifications", label: "Notifications", count: notificationRows.length },
   ];
 
+  const summaryStats = [
+    { label: "Unread", value: unreadCount, helper: "Messages", action: () => setFilter("messages"), active: filter === "messages" },
+    { label: "Open", value: openInvoiceCount, helper: "Invoices", action: () => setPage("invoices"), active: false },
+    { label: "Pending", value: pendingContractCount, helper: "Contracts", action: () => setPage("contracts"), active: false },
+  ];
+
   return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-5">
-          <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Unread messages</p>
-          <p className="ecc-display text-4xl mt-2" style={{ color: C.ink }}>{unreadCount}</p>
-          <button onClick={() => setFilter("messages")} className="text-xs underline mt-2" style={{ color: C.forest }}>View message activity</button>
-        </Card>
-        <Card className="p-5">
-          <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Open invoices</p>
-          <p className="ecc-display text-4xl mt-2" style={{ color: C.ink }}>{openInvoiceCount}</p>
-          <button onClick={() => setPage("invoices")} className="text-xs underline mt-2" style={{ color: C.forest }}>Go to invoices</button>
-        </Card>
-        <Card className="p-5">
-          <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Pending contracts</p>
-          <p className="ecc-display text-4xl mt-2" style={{ color: C.ink }}>{pendingContractCount}</p>
-          <button onClick={() => setPage("contracts")} className="text-xs underline mt-2" style={{ color: C.forest }}>Go to contracts</button>
-        </Card>
-      </div>
+    <div className="space-y-4">
+      <Card className="overflow-hidden">
+        <div className="grid grid-cols-3">
+          {summaryStats.map((stat, index) => (
+            <button
+              key={stat.label}
+              onClick={stat.action}
+              className="text-left px-3 py-3 sm:px-5 sm:py-4"
+              style={{
+                background: stat.active ? C.forest : "#fff",
+                borderLeft: index ? `1px solid ${C.line}` : "none",
+                color: stat.active ? "#fff" : C.ink,
+              }}
+            >
+              <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.2em] truncate" style={{ color: stat.active ? "rgba(255,255,255,0.72)" : C.taupe }}>{stat.label}</p>
+              <div className="mt-1 flex items-baseline gap-1.5 sm:gap-2">
+                <p className="ecc-display text-3xl sm:text-4xl leading-none">{stat.value}</p>
+                <p className="text-[10px] sm:text-xs font-medium truncate" style={{ color: stat.active ? "rgba(255,255,255,0.82)" : C.charcoal }}>{stat.helper}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </Card>
 
       <Card className="p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between px-5 pt-5 pb-2">
@@ -4684,6 +4695,7 @@ function SettingsPage({ state, actions }) {
   const emailTemplates = state.emailTemplates || [];
   const tabs = [
     { key: "email", label: "Email", icon: Mail },
+    { key: "notifications", label: "Notifications", icon: Bell },
     { key: "locations", label: "Locations", icon: CalendarDays },
     { key: "templates", label: "Templates", icon: LayoutTemplate },
     { key: "portal", label: "Portal", icon: CheckCircle2 },
@@ -4744,6 +4756,10 @@ function SettingsPage({ state, actions }) {
             </div>
           </Card>
         </div>
+      )}
+
+      {active === "notifications" && (
+        <NotificationSettingsPanel state={state} actions={actions} />
       )}
 
       {active === "locations" && (
@@ -4810,6 +4826,245 @@ function SettingsPage({ state, actions }) {
           </div>
         </Card>
       )}
+    </div>
+  );
+}
+
+
+function normalizeLocalNotificationSettings(settings = {}) {
+  return {
+    enabled: false,
+    permission: typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default",
+    deliveryMode: "local",
+    ...settings,
+    categories: {
+      messages: true,
+      inquiries: true,
+      quotes: true,
+      contracts: true,
+      invoices: true,
+      payments: true,
+      sessions: true,
+      ...(settings.categories || {}),
+    },
+    quietHours: {
+      enabled: false,
+      start: "21:00",
+      end: "08:00",
+      ...(settings.quietHours || {}),
+    },
+    devices: Array.isArray(settings.devices) ? settings.devices : [],
+  };
+}
+
+function guessDeviceName() {
+  if (typeof navigator === "undefined") return "This browser";
+  const ua = navigator.userAgent || "";
+  if (/iPhone/i.test(ua)) return "iPhone web app";
+  if (/iPad/i.test(ua)) return "iPad web app";
+  if (/Mac/i.test(ua)) return "Mac browser";
+  if (/Windows/i.test(ua)) return "Windows browser";
+  if (/Android/i.test(ua)) return "Android browser";
+  return "This browser";
+}
+
+function base64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+}
+
+async function ensureNotificationRegistration() {
+  if (typeof window === "undefined") throw new Error("Notifications only run in the browser.");
+  if (!("Notification" in window)) throw new Error("This browser does not support notifications.");
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return { permission, mode: "blocked", subscription: null };
+
+  let registration = null;
+  if ("serviceWorker" in navigator) {
+    registration = await navigator.serviceWorker.register("/sw.js");
+    await navigator.serviceWorker.ready;
+  }
+
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (registration && publicKey && "PushManager" in window) {
+    const existing = await registration.pushManager.getSubscription();
+    const subscription = existing || await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: base64ToUint8Array(publicKey),
+    });
+    try {
+      await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription }),
+      });
+    } catch {
+      // The frontend keeps the device locally until the Supabase push endpoint is connected.
+    }
+    return { permission, mode: "web-push", subscription };
+  }
+
+  return { permission, mode: registration ? "service-worker-local" : "local", subscription: null };
+}
+
+async function sendTestBrowserNotification() {
+  if (typeof window === "undefined" || !("Notification" in window)) throw new Error("Notifications are not supported here.");
+  if (Notification.permission !== "granted") throw new Error("Notification permission is not enabled yet.");
+  const payload = {
+    body: "Test from EC Creative Studios CRM. If you see this, this device is ready.",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    tag: "eccs-test-notification",
+    data: { url: "/" },
+  };
+  if ("serviceWorker" in navigator) {
+    const registration = await navigator.serviceWorker.ready;
+    return registration.showNotification("CRM notifications are working", payload);
+  }
+  return new Notification("CRM notifications are working", payload);
+}
+
+function NotificationSettingsPanel({ state, actions }) {
+  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+  const settings = normalizeLocalNotificationSettings(state.notificationSettings || {});
+  const categories = [
+    ["messages", "Client messages"],
+    ["inquiries", "New inquiries"],
+    ["quotes", "Quote activity"],
+    ["contracts", "Contract signatures"],
+    ["invoices", "Open invoices"],
+    ["payments", "Payments received"],
+    ["sessions", "Session updates"],
+  ];
+
+  const enableNotifications = async () => {
+    setBusy(true);
+    setStatus("Requesting notification access…");
+    try {
+      const result = await ensureNotificationRegistration();
+      actions.updateNotificationSettings({ enabled: result.permission === "granted", permission: result.permission, deliveryMode: result.mode, lastPermissionCheckedAt: new Date().toLocaleString() });
+      if (result.permission === "granted") {
+        actions.registerNotificationDevice({
+          id: result.subscription?.endpoint || `local-${Date.now()}`,
+          name: guessDeviceName(),
+          platform: typeof navigator !== "undefined" ? navigator.platform || "Browser" : "Browser",
+          mode: result.mode,
+          permission: result.permission,
+          endpoint: result.subscription?.endpoint || "",
+          registeredAt: new Date().toLocaleString(),
+        });
+        setStatus(result.mode === "web-push" ? "This device is registered for Web Push." : "This device is enabled for local browser notifications. Add VAPID keys for server push.");
+      } else {
+        setStatus("Permission was not granted. Check browser settings if you want alerts here.");
+      }
+    } catch (error) {
+      setStatus(error.message || "Could not enable notifications on this browser.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const testNotification = async () => {
+    setBusy(true);
+    setStatus("Sending test notification…");
+    try {
+      await sendTestBrowserNotification();
+      setStatus("Test notification sent to this device.");
+    } catch (error) {
+      setStatus(error.message || "Test notification failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5">
+      <Card className="p-5">
+        <SectionLabel icon={Bell}>Push Notifications</SectionLabel>
+        <div className="px-5 pb-5 space-y-4">
+          <div className="rounded-2xl p-4" style={{ background: C.bg }}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium" style={{ color: C.ink }}>Device notifications</p>
+                <p className="text-xs mt-1" style={{ color: C.charcoal }}>Works on desktop browsers. On iPhone, add the CRM to the Home Screen first, then open it from the icon and enable notifications.</p>
+              </div>
+              <Pill tone={settings.enabled && settings.permission === "granted" ? "done" : "neutral"}>{settings.permission || "default"}</Pill>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-4">
+              <button disabled={busy} onClick={enableNotifications} className="px-4 py-2 rounded-full text-sm font-medium text-white disabled:opacity-60" style={{ background: C.forest }}>
+                {settings.permission === "granted" ? "Refresh device" : "Enable notifications"}
+              </button>
+              <button disabled={busy || settings.permission !== "granted"} onClick={testNotification} className="px-4 py-2 rounded-full text-sm font-medium disabled:opacity-50" style={{ background: "#fff", border: `1px solid ${C.line}`, color: C.ink }}>
+                Send test
+              </button>
+              <button onClick={() => actions.updateNotificationSettings({ enabled: !settings.enabled })} className="px-4 py-2 rounded-full text-sm font-medium" style={{ background: settings.enabled ? C.charcoal : "#fff", border: `1px solid ${C.line}`, color: settings.enabled ? "#fff" : C.ink }}>
+                {settings.enabled ? "Notifications on" : "Notifications off"}
+              </button>
+            </div>
+            {status && <p className="text-xs mt-3" style={{ color: C.charcoal }}>{status}</p>}
+          </div>
+
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.25em] mb-3" style={{ color: C.taupe }}>Notify me for</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {categories.map(([key, label]) => {
+                const enabled = settings.categories?.[key] !== false;
+                return (
+                  <button key={key} onClick={() => actions.updateNotificationSettings({ categories: { [key]: !enabled } })} className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left" style={{ background: enabled ? C.cream : "#fff", border: `1px solid ${C.line}`, color: C.ink }}>
+                    <span className="text-sm font-medium">{label}</span>
+                    <Pill tone={enabled ? "done" : "neutral"}>{enabled ? "on" : "off"}</Pill>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-2xl p-4" style={{ border: `1px solid ${C.line}` }}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium" style={{ color: C.ink }}>Quiet hours</p>
+                <p className="text-xs mt-1" style={{ color: C.charcoal }}>Stops automatic local notifications during your set window. Manual test alerts still send.</p>
+              </div>
+              <button onClick={() => actions.updateNotificationSettings({ quietHours: { enabled: !settings.quietHours.enabled } })} className="px-3 py-1.5 rounded-full text-xs font-medium" style={{ background: settings.quietHours.enabled ? C.forest : C.bg, color: settings.quietHours.enabled ? "#fff" : C.ink }}>
+                {settings.quietHours.enabled ? "On" : "Off"}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              <Field label="Start" type="time" value={settings.quietHours.start || "21:00"} onChange={(value) => actions.updateNotificationSettings({ quietHours: { start: value } })} />
+              <Field label="End" type="time" value={settings.quietHours.end || "08:00"} onChange={(value) => actions.updateNotificationSettings({ quietHours: { end: value } })} />
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-5 h-fit">
+        <SectionLabel icon={CheckCircle2}>Registered Devices</SectionLabel>
+        <div className="px-5 pb-5 space-y-2">
+          {(settings.devices || []).length === 0 ? (
+            <p className="text-sm" style={{ color: C.charcoal }}>No devices enabled yet. Enable notifications on each iPhone or desktop you want alerts on.</p>
+          ) : (
+            settings.devices.map((device) => (
+              <div key={device.id} className="rounded-2xl p-3" style={{ background: C.bg }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: C.ink }}>{device.name}</p>
+                    <p className="text-xs mt-1" style={{ color: C.charcoal }}>{device.mode} · {device.permission}</p>
+                    <p className="text-[11px] mt-1" style={{ color: C.taupe }}>{device.registeredAt}</p>
+                  </div>
+                  <button onClick={() => actions.removeNotificationDevice(device.id)} className="p-2 rounded-full" style={{ color: C.red, background: "#fff" }}><Trash2 size={14} /></button>
+                </div>
+              </div>
+            ))
+          )}
+          <div className="rounded-2xl p-3 mt-4" style={{ background: C.charcoal, color: "#fff" }}>
+            <p className="text-xs font-medium">Backend-ready note</p>
+            <p className="text-xs mt-1" style={{ color: C.cream }}>When Supabase is connected, save these subscriptions in a device table and send from an Edge Function using VAPID keys.</p>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
