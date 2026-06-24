@@ -217,7 +217,12 @@ export default function ECCSPrototype() {
   const [state, dispatch] = useReducer(crmReducer, undefined, initState);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // Local persistence is best-effort until Supabase becomes the source of truth.
+    }
   }, [state]);
 
   const selectedBundle = useMemo(
@@ -302,7 +307,9 @@ export default function ECCSPrototype() {
       deleteQuote: (quoteId) => dispatch({ type: "delete_quote", quoteId }),
       deleteContract: (contractId) => dispatch({ type: "delete_contract", contractId }),
       deleteInvoice: (invoiceId) => dispatch({ type: "delete_invoice", invoiceId }),
-      resetDemo: () => window.localStorage.removeItem(STORAGE_KEY),
+      resetDemo: () => {
+        if (typeof window !== "undefined") window.localStorage.removeItem(STORAGE_KEY);
+      },
     }),
     [],
   );
@@ -318,20 +325,12 @@ export default function ECCSPrototype() {
       />
 
       {app === "admin" ? (
-        <AdminApp
-          state={state}
-          selectedBundle={selectedBundle}
-          actions={actions}
-          setApp={setApp}
-          openManualOverride={() => setOverrideOpen(true)}
-        />
+        <AdminApp state={state} selectedBundle={selectedBundle} actions={actions} setApp={setApp} onManualOverride={() => setOverrideOpen(true)} />
       ) : (
         <ClientApp state={state} selectedBundle={selectedBundle} actions={actions} setApp={setApp} />
       )}
 
-      {app === "admin" && (
-        <ManualOverride open={overrideOpen} setOpen={setOverrideOpen} selectedBundle={selectedBundle} actions={actions} />
-      )}
+      <ManualOverride open={overrideOpen} setOpen={setOverrideOpen} selectedBundle={selectedBundle} actions={actions} />
     </div>
   );
 }

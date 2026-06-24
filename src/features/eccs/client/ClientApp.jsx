@@ -59,22 +59,22 @@ export default function ClientApp({ state, selectedBundle, actions }) {
   }
 
   return (
-    <div className="flex" style={{ minHeight: "calc(100vh - 44px)" }}>
+    <div className="flex min-w-0 safe-app-frame" style={{ minHeight: "calc(100vh - 44px)" }}>
       <aside className="hidden md:flex md:flex-col w-64 shrink-0 px-4 py-6" style={{ background: C.charcoal }}>
         <PortalSidebar page={page} setPage={setPage} clientName={selectedBundle.client.name} sessionType={selectedBundle.client.sessionType} />
       </aside>
 
       {drawer && (
-        <div className="fixed inset-0 z-40 flex md:hidden">
-          <div className="w-64 px-4 py-6 overflow-y-auto" style={{ background: C.charcoal }}>
+        <div className="fixed inset-0 z-40 flex md:hidden safe-drawer">
+          <div className="w-64 max-w-[86vw] px-4 py-6 overflow-y-auto" style={{ background: C.charcoal }}>
             <PortalSidebar page={page} setPage={(nextPage) => { setPage(nextPage); setDrawer(false); }} clientName={selectedBundle.client.name} sessionType={selectedBundle.client.sessionType} />
           </div>
           <div className="flex-1" style={{ background: "rgba(0,0,0,0.35)" }} onClick={() => setDrawer(false)} />
         </div>
       )}
 
-      <main className="flex-1 min-w-0 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
-        <div className="flex items-center gap-3 px-4 sm:px-6 py-4" style={{ borderBottom: `1px solid ${C.line}` }}>
+      <main className="flex-1 min-w-0 pb-20 md:pb-0 overflow-x-hidden">
+        <div className="flex items-center gap-3 px-4 sm:px-6 py-4 safe-topbar" style={{ borderBottom: `1px solid ${C.line}` }}>
           <button className="md:hidden" onClick={() => setDrawer(true)}>
             <Menu size={20} color={C.ink} />
           </button>
@@ -96,7 +96,7 @@ export default function ClientApp({ state, selectedBundle, actions }) {
         </div>
       </main>
 
-      <div className="ecc-bottom-nav md:hidden fixed bottom-0 left-0 right-0 z-30 flex justify-around pt-2" style={{ background: "#fff", borderTop: `1px solid ${C.line}` }}>
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex justify-around pt-2 safe-bottom-nav" style={{ background: "#fff", borderTop: `1px solid ${C.line}` }}>
         {BOTTOM_NAV.map((item) => {
           const Icon = item.icon;
           const active = item.key === "__more" ? drawer : page === item.key;
@@ -203,7 +203,7 @@ function OverviewPage({ state, selectedBundle, actions, setPage }) {
           </p>
           {availableDates.length === 0 ? (
             <p className="text-sm rounded-xl p-4" style={{ background: C.bg, color: C.taupe }}>
-              Your studio hasn&apos;t opened any dates yet — check back soon or reach out in Messages.
+              Your studio hasn't opened any dates yet — check back soon or reach out in Messages.
             </p>
           ) : (
             <div className="space-y-4">
@@ -436,7 +436,7 @@ function DocumentsPage({ selectedBundle, actions }) {
               </div>
             ))}
           </div>
-          {quote.status === "accepted" && <p className="text-xs mt-4" style={{ color: C.taupe }}>Accepted — this quote is locked and can&apos;t be edited.</p>}
+          {quote.status === "accepted" && <p className="text-xs mt-4" style={{ color: C.taupe }}>Accepted — this quote is locked and can't be edited.</p>}
         </ClientModal>
       )}
 
@@ -544,7 +544,7 @@ function VisionPage({ selectedBundle }) {
       {images.length === 0 ? (
         <Card className="p-10 text-center">
           <ImageIcon size={24} color={C.taupe} className="mx-auto mb-3" />
-          <p className="text-sm" style={{ color: C.charcoal }}>Your studio hasn&apos;t added inspiration images yet — check back soon.</p>
+          <p className="text-sm" style={{ color: C.charcoal }}>Your studio hasn't added inspiration images yet — check back soon.</p>
         </Card>
       ) : mode === "slideshow" ? (
         <Card className="overflow-hidden">
@@ -617,7 +617,7 @@ function PlanPage({ selectedBundle }) {
         </p>
       </Card>
       <Card className="p-5">
-        <p className="text-[10px] uppercase tracking-[0.3em] mb-3" style={{ color: C.taupe }}>What&apos;s Next</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] mb-3" style={{ color: C.taupe }}>What's Next</p>
         <div className="space-y-3">
           {steps.map((step) => (
             <div key={step.label} className="flex items-start gap-3">
@@ -655,7 +655,7 @@ function GalleryPage({ selectedBundle }) {
         <p className="ecc-display text-3xl" style={{ color: C.ink }}>Your Gallery</p>
         <Card className="p-10 text-center">
           <ImageIcon size={24} color={C.taupe} className="mx-auto mb-3" />
-          <p className="text-sm" style={{ color: C.charcoal }}>Marked delivered, but the gallery link hasn&apos;t been added yet — check back soon.</p>
+          <p className="text-sm" style={{ color: C.charcoal }}>Marked delivered, but the gallery link hasn't been added yet — check back soon.</p>
         </Card>
       </div>
     );
@@ -782,7 +782,7 @@ function PayNowModal({ invoice, onClose, onConfirm }) {
           <p className="text-sm" style={{ color: C.ink }}>Send {formatCurrency(invoice.balanceDue)} to <strong>payments@eccreativestudios.com</strong>, then confirm below once sent.</p>
         </div>
       ) : (
-        <p className="text-xs mb-4" style={{ color: C.taupe }}>This demo doesn&apos;t process a real card — confirming marks the invoice paid the same way a completed Stripe checkout would.</p>
+        <p className="text-xs mb-4" style={{ color: C.taupe }}>This demo doesn't process a real card — confirming marks the invoice paid the same way a completed Stripe checkout would.</p>
       )}
 
       <button onClick={() => onConfirm(method === "card" ? "Card" : "Zelle")} className="w-full py-3 rounded-xl text-sm font-medium text-white" style={{ background: C.forest }}>
