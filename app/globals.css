@@ -14,11 +14,6 @@ html,
 body {
   min-height: 100%;
   margin: 0;
-  /* Prevent stray wide elements (long urls, wide tables, etc.) from creating
-     horizontal scroll on narrow viewports. Individual components should still
-     handle their own overflow-x for scrollable rows (e.g. tab strips). */
-  overflow-x: hidden;
-  width: 100%;
 }
 
 button,
@@ -30,20 +25,4 @@ select {
 
 button {
   cursor: pointer;
-}
-
-/* --- Safe-area-aware app shell helpers ---
-   Used by the shared top bar (TopSwitcher) and the two mobile bottom nav bars
-   (AdminApp, ClientApp) so iPhone notch/Dynamic Island/home-indicator spacing
-   is handled once, at the shell level, instead of being patched per page. */
-.ecc-safe-top {
-  padding-top: env(safe-area-inset-top, 0px);
-}
-
-.ecc-safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-.ecc-bottom-nav {
-  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
 }

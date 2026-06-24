@@ -49,7 +49,6 @@ import {
 } from "../lib/crm";
 import { Avatar, Card, EmptyState, Pill, SectionLabel, StatusLight } from "../components/ui";
 import { LinkPreviewCard } from "../components/LinkPreviewCard";
-import { ManualOverrideTrigger } from "../components/ManualOverride";
 
 const NAV = [
   { group: null, items: [
@@ -99,7 +98,7 @@ const BOTTOM_NAV = [
 ];
 
 
-export default function AdminApp({ state, selectedBundle, actions, setApp, openManualOverride }) {
+export default function AdminApp({ state, selectedBundle, actions, setApp }) {
   const [page, setPage] = useState("dashboard");
   const [query, setQuery] = useState("");
   const [drawer, setDrawer] = useState(false);
@@ -151,7 +150,7 @@ export default function AdminApp({ state, selectedBundle, actions, setApp, openM
         </div>
       )}
 
-      <main className="flex-1 min-w-0 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+      <main className="flex-1 min-w-0 pb-16 md:pb-0">
         <Topbar
           query={query}
           setQuery={setQuery}
@@ -190,7 +189,7 @@ export default function AdminApp({ state, selectedBundle, actions, setApp, openM
               setPage={go}
             />
           )}
-          {page === "projects" && <ProjectsPage key={`proj-${state.selectedClientId}`} state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} openManualOverride={openManualOverride} />}
+          {page === "projects" && <ProjectsPage key={`proj-${state.selectedClientId}`} state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
           {page === "quotes" && <QuotesPage key={`quo-${state.selectedClientId}`} state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
           {page === "contracts" && <ContractsPage key={`con-${state.selectedClientId}`} state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
           {page === "invoices" && <InvoicesPage key={`inv-${state.selectedClientId}`} state={state} selectedBundle={selectedBundle} actions={actions} setPage={go} />}
@@ -224,7 +223,7 @@ export default function AdminApp({ state, selectedBundle, actions, setApp, openM
         />
       )}
 
-      <div className="ecc-bottom-nav md:hidden fixed bottom-0 left-0 right-0 z-30 flex justify-around pt-2" style={{ background: C.charcoal }}>
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex justify-around py-2" style={{ background: C.charcoal }}>
         {BOTTOM_NAV.map((item) => {
           const Icon = item.icon;
           const active = item.key === "__more" ? drawer : page === item.key;
@@ -743,7 +742,7 @@ function DashboardPage({ state, selectedBundle, filteredClients, actions, setPag
               <SectionLabel icon={Sparkles}>Pipeline Overview</SectionLabel>
               <button onClick={() => setPage("pipeline")} className="text-xs underline" style={{ color: C.forest }}>Open full pipeline</button>
             </div>
-            <p className="text-xs px-5 pb-3" style={{ color: C.taupe }}>No client selected — here&apos;s the sales pipeline at a glance. Click anyone to focus on them.</p>
+            <p className="text-xs px-5 pb-3" style={{ color: C.taupe }}>No client selected — here's the sales pipeline at a glance. Click anyone to focus on them.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 px-5 pb-5">
               {PIPELINE_STAGES.slice(1, 9).map((stage) => {
                 const items = state.clients.filter((client) => getClientBundle(state, client.id).stage === stage.key);
@@ -795,7 +794,7 @@ function DashboardPage({ state, selectedBundle, filteredClients, actions, setPag
                 </div>
               );
             })}
-            {filteredClients.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>No clients match &quot;{query}&quot;.</p>}
+            {filteredClients.length === 0 && <p className="text-sm" style={{ color: C.taupe }}>No clients match "{query}".</p>}
           </div>
         </Card>
       </div>
@@ -1467,7 +1466,7 @@ function InquiryModalContent({ inquiry }) {
 }
 
 
-function ProjectsPage({ state, selectedBundle, actions, setPage, openManualOverride }) {
+function ProjectsPage({ state, selectedBundle, actions, setPage }) {
   const [query, setQuery] = useState("");
   const [bookedOnly, setBookedOnly] = useState(false);
   const [visibleCount, setVisibleCount] = useState(9);
@@ -1487,8 +1486,8 @@ function ProjectsPage({ state, selectedBundle, actions, setPage, openManualOverr
           <Pill tone="info">One folder per client</Pill>
         </div>
         <p className="text-sm px-5 pb-3" style={{ color: C.charcoal }}>
-          Every client gets a folder. A project only lands inside it once they&apos;re actually booked — quote accepted, contract
-          signed, payment received. Click a folder to open that client&apos;s workspace below.
+          Every client gets a folder. A project only lands inside it once they're actually booked — quote accepted, contract
+          signed, payment received. Click a folder to open that client's workspace below.
         </p>
         <div className="flex flex-wrap items-center gap-2 px-5 pb-4">
           <div className="flex items-center gap-2 px-3 py-2 rounded-full flex-1 min-w-[180px]" style={{ background: C.bg }}>
@@ -1530,17 +1529,12 @@ function ProjectsPage({ state, selectedBundle, actions, setPage, openManualOverr
         )}
       </Card>
 
-      <ProjectWorkspaceCard selectedBundle={selectedBundle} actions={actions} setPage={setPage} openManualOverride={openManualOverride} />
+      <ProjectWorkspaceCard selectedBundle={selectedBundle} actions={actions} setPage={setPage} />
     </div>
   );
 }
 
-function ProjectWorkspaceCard({ selectedBundle, actions, setPage, openManualOverride }) {
-  // NOTE: hook must run unconditionally before any early return, or React throws
-  // "Rendered more hooks than during the previous render" the moment selectedBundle.client
-  // flips between null and a real client (e.g. switching clients, deselecting a folder).
-  const { requestSend, modal } = useEmailGate(actions, selectedBundle.client?.id);
-
+function ProjectWorkspaceCard({ selectedBundle, actions, setPage }) {
   if (!selectedBundle.client) {
     return <EmptyState title="No client selected" body="Open a folder above to view the booking gate and project handoff." />;
   }
@@ -1550,6 +1544,7 @@ function ProjectWorkspaceCard({ selectedBundle, actions, setPage, openManualOver
   const canSendAvailability = projectStatus.projectCreated && !session?.sessionDate;
   const canSendCalendarInvite = Boolean(session?.sessionDate) && !projectStatus.calendarInviteSent;
   const canDeliverGallery = session?.status === "completed" && session?.galleryStatus !== "delivered";
+  const { requestSend, modal } = useEmailGate(actions, selectedBundle.client.id);
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-5">
@@ -1588,14 +1583,9 @@ function ProjectWorkspaceCard({ selectedBundle, actions, setPage, openManualOver
             <p className="ecc-display text-3xl" style={{ color: C.ink }}>Project Workspace</p>
             <p className="text-sm mt-1" style={{ color: C.charcoal }}>{selectedBundle.client.name}</p>
           </div>
-          <div className="flex items-center gap-2">
-            {openManualOverride && (
-              <ManualOverrideTrigger onClick={() => openManualOverride()} />
-            )}
-            <button onClick={() => setPage("portal")} className="text-sm underline" style={{ color: C.forest }}>
-              Edit portal
-            </button>
-          </div>
+          <button onClick={() => setPage("portal")} className="text-sm underline" style={{ color: C.forest }}>
+            Edit portal
+          </button>
         </div>
         {!projectStatus.projectCreated ? (
           <EmptyState
@@ -1768,15 +1758,7 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
   const inquiryPackage = getInquiryPackage(selectedBundle.inquiry, state.packages);
   const quotePackage = getQuoteSelectedPackage(quote, state.packages);
   const sourcePackage = inquiryPackage || quotePackage;
-  // Accepted/declined quotes are permanently locked (no unlock control is shown for them).
-  // Sent/viewed quotes lock by default but respect an explicit `locked: false` override —
-  // otherwise "Unlock edit" has no effect, since the status alone would keep it locked.
-  const quoteLocked = Boolean(
-    quote && (
-      ["accepted", "declined"].includes(quote.status) ||
-      (["sent", "viewed"].includes(quote.status) && quote.locked !== false)
-    ),
-  );
+  const quoteLocked = Boolean(quote && (quote.locked || ["sent", "viewed", "accepted", "declined"].includes(quote.status)));
 
   if (!selectedBundle.client) {
     return <QuotesDashboard state={state} actions={actions} />;
@@ -1815,11 +1797,7 @@ function QuotesPage({ state, selectedBundle, actions, setPage }) {
               <button onClick={() => setPreviewOpen(true)} className="px-3 py-2 rounded-full text-xs font-medium flex items-center gap-1.5" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
                 <Eye size={13} /> {quoteLocked ? "View sent quote" : "Preview"}
               </button>
-              <button onClick={() => {
-                const dependentContract = state.contracts.find((entry) => entry.quoteId === quote.id);
-                if (dependentContract) { window.alert(`Can't delete ${quote.number} — contract ${dependentContract.number} was generated from it. Delete that contract first.`); return; }
-                if (window.confirm(`Delete ${quote.number}?`)) actions.deleteQuote(quote.id);
-              }} className="px-3 py-2 rounded-full text-xs font-medium flex items-center gap-1.5" style={{ border: `1px solid ${C.line}`, color: C.red }}>
+              <button onClick={() => window.confirm(`Delete ${quote.number}?`) && actions.deleteQuote(quote.id)} className="px-3 py-2 rounded-full text-xs font-medium flex items-center gap-1.5" style={{ border: `1px solid ${C.line}`, color: C.red }}>
                 <Trash2 size={13} /> Delete
               </button>
             </div>
@@ -2191,7 +2169,7 @@ function AddOnsPage({ state, actions }) {
     <div className="space-y-4">
       <p className="ecc-display text-2xl" style={{ color: C.ink }}>Add-Ons</p>
       <p className="text-sm max-w-2xl" style={{ color: C.charcoal }}>
-        These show up in the &quot;+ Add addon&quot; picker on every quote and invoice. Studio Rental lives here too — it&apos;s just an add-on like any other.
+        These show up in the "+ Add addon" picker on every quote and invoice. Studio Rental lives here too — it's just an add-on like any other.
       </p>
 
       <Card className="p-4">
@@ -2476,14 +2454,6 @@ function ContractsDashboard({ state, actions }) {
 function ContractsPage({ state, selectedBundle, actions, setPage }) {
   const contract = selectedBundle.primaryContract;
   const { requestSend, modal: emailModal } = useEmailGate(actions, selectedBundle.client?.id);
-  // Signed contracts are permanently locked. Sent-but-unsigned contracts lock by default
-  // but respect an explicit `locked: false` override from "Unlock edit", same pattern as quotes.
-  const contractLocked = Boolean(
-    contract && (
-      contract.status === "signed" ||
-      (contract.status === "sent" && contract.locked !== false)
-    ),
-  );
 
   if (!selectedBundle.client) {
     return <ContractsDashboard state={state} actions={actions} />;
@@ -2511,17 +2481,11 @@ function ContractsPage({ state, selectedBundle, actions, setPage }) {
             <SummaryChip label="Contract No." value={contract.number} />
             <div className="rounded-2xl p-4" style={{ background: C.bg }}>
               <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: C.taupe }}>Template</p>
-              <select disabled={contractLocked} value={contract.templateName} onChange={(event) => actions.patchContract(contract.id, { templateName: event.target.value })} className="mt-2 w-full px-3 py-2 rounded-xl text-sm disabled:opacity-50" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+              <select value={contract.templateName} onChange={(event) => actions.patchContract(contract.id, { templateName: event.target.value })} className="mt-2 w-full px-3 py-2 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
                 {["Standard Photography Agreement", "Wedding Agreement", "Branding Agreement", "Event Agreement", "Milestone Package Agreement"].map((name) => <option key={name} value={name}>{name}</option>)}
               </select>
             </div>
             <SummaryChip label="Status" value={contract.status} />
-            {contractLocked && <Pill tone="warn">locked</Pill>}
-            {contractLocked && contract.status !== "signed" && (
-              <button onClick={() => actions.patchContract(contract.id, { locked: false })} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: C.cream, color: C.ink }}>
-                Unlock edit
-              </button>
-            )}
             <SummaryChip label="Drafted" value={contract.createdAt} />
             <div className="flex flex-wrap gap-2">
               <button onClick={() => { const d = buildEmailDraft("contract", selectedBundle); requestSend(d.subject, d.body, () => actions.sendContract(contract.id)); }} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: "#edf2f5", color: C.blue }}>
@@ -2535,11 +2499,7 @@ function ContractsPage({ state, selectedBundle, actions, setPage }) {
                   {selectedBundle.primaryInvoice ? "View invoice" : "Create invoice"} <ChevronRight size={12} />
                 </button>
               )}
-              <button onClick={() => {
-                const dependentInvoice = state.invoices.find((entry) => entry.contractId === contract.id);
-                if (dependentInvoice) { window.alert(`Can't delete ${contract.number} — invoice ${dependentInvoice.number} was generated from it. Delete that invoice first.`); return; }
-                if (window.confirm(`Delete ${contract.number}?`)) actions.deleteContract(contract.id);
-              }} className="px-3 py-2 rounded-full text-xs font-medium flex items-center gap-1" style={{ background: "#fff", color: C.red, border: `1px solid ${C.line}` }}>
+              <button onClick={() => window.confirm(`Delete ${contract.number}?`) && actions.deleteContract(contract.id)} className="px-3 py-2 rounded-full text-xs font-medium flex items-center gap-1" style={{ background: "#fff", color: C.red, border: `1px solid ${C.line}` }}>
                 <Trash2 size={13} /> Delete
               </button>
             </div>
@@ -2578,23 +2538,20 @@ function ContractsPage({ state, selectedBundle, actions, setPage }) {
             </div>
 
             <div className="flex flex-wrap gap-2 mb-5">
-              <button disabled={contractLocked} onClick={() => actions.patchContract(contract.id, { clauses: [...(contract.clauses || []), { id: `clause_${Date.now()}`, title: `${(contract.clauses || []).length + 1}. New Section`, body: "Write clause text here." }] })} className="px-3 py-2 rounded-full text-xs font-medium disabled:opacity-40" style={{ background: C.cream, color: C.ink }}>+ Add section</button>
+              <button onClick={() => actions.patchContract(contract.id, { clauses: [...(contract.clauses || []), { id: `clause_${Date.now()}`, title: `${(contract.clauses || []).length + 1}. New Section`, body: "Write clause text here." }] })} className="px-3 py-2 rounded-full text-xs font-medium" style={{ background: C.cream, color: C.ink }}>+ Add section</button>
             </div>
             <div className="space-y-7">
               {(contract.clauses || []).map((clause) => (
                 <div key={clause.id}>
                   <div className="flex items-center gap-2 mb-1.5">
-                    <input disabled={contractLocked} value={clause.title} onChange={(event) => actions.patchContract(contract.id, { clauses: contract.clauses.map((entry) => (entry.id === clause.id ? { ...entry, title: event.target.value } : entry)) })} className="ecc-display text-lg flex-1 bg-transparent outline-none disabled:opacity-60" style={{ color: C.ink }} />
-                    {!contractLocked && (
-                      <button onClick={() => actions.patchContract(contract.id, { clauses: contract.clauses.filter((entry) => entry.id !== clause.id) })} className="text-xs" style={{ color: C.red }}>Remove</button>
-                    )}
+                    <input value={clause.title} onChange={(event) => actions.patchContract(contract.id, { clauses: contract.clauses.map((entry) => (entry.id === clause.id ? { ...entry, title: event.target.value } : entry)) })} className="ecc-display text-lg flex-1 bg-transparent outline-none" style={{ color: C.ink }} />
+                    <button onClick={() => actions.patchContract(contract.id, { clauses: contract.clauses.filter((entry) => entry.id !== clause.id) })} className="text-xs" style={{ color: C.red }}>Remove</button>
                   </div>
                   <textarea
                     rows={3}
-                    disabled={contractLocked}
                     value={clause.body}
                     onChange={(event) => actions.patchContract(contract.id, { clauses: contract.clauses.map((entry) => (entry.id === clause.id ? { ...entry, body: event.target.value } : entry)) })}
-                    className="w-full text-sm leading-7 outline-none resize-none bg-transparent disabled:opacity-60"
+                    className="w-full text-sm leading-7 outline-none resize-none bg-transparent"
                     style={{ color: C.charcoal, fontFamily: "inherit" }}
                   />
                 </div>
@@ -2913,7 +2870,7 @@ function PaymentsPage({ state, selectedBundle, actions, setPage }) {
   return (
     <div className="space-y-5">
       <p className="ecc-display text-2xl" style={{ color: C.ink }}>Payments</p>
-      <p className="text-sm" style={{ color: C.charcoal }}>Who owes money, who&apos;s paid a deposit, what&apos;s past due, and what reminders need to go out.</p>
+      <p className="text-sm" style={{ color: C.charcoal }}>Who owes money, who's paid a deposit, what's past due, and what reminders need to go out.</p>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="p-4"><p className="text-[10px] uppercase tracking-[0.2em]" style={{ color: C.taupe }}>Total Unpaid</p><p className="ecc-display text-2xl mt-1" style={{ color: C.ink }}>{formatCurrency(overview.unpaid)}</p></Card>
@@ -3597,9 +3554,8 @@ function ActivityPage({ state, selectedBundle, actions, setPage }) {
   const selectedClientId = selectedBundle?.client?.id || state.selectedClientId;
 
   const clientById = useMemo(() => {
-    const list = Array.isArray(state.clients) ? state.clients : [];
-    return Object.fromEntries(list.map((client) => [client.id, client]));
-  }, [state.clients]);
+    return Object.fromEntries(safeClients.map((client) => [client.id, client]));
+  }, [safeClients]);
 
   const findClientName = (clientId) => clientById[clientId]?.name || "System";
 
@@ -3829,7 +3785,7 @@ function EmailsPage({ selectedBundle, actions, setPage }) {
         <p className="text-sm mb-3" style={{ color: C.charcoal }}>
           These actions make the handoff visible inside admin instead of relying on implied status changes.
         </p>
-        <button onClick={() => setPage("projects")} className="text-xs underline" style={{ color: C.forest }}>View this client&apos;s project workspace →</button>
+        <button onClick={() => setPage("projects")} className="text-xs underline" style={{ color: C.forest }}>View this client's project workspace →</button>
       </Card>
 
       <div className="space-y-5">
@@ -4097,7 +4053,7 @@ function CalendarPage({ state, selectedBundle, actions, setPage }) {
             ) : (
               <>
                 <DayAgenda day={selected} />
-                {selectedBundle.session?.sessionDate && <p className="text-[11px] mt-3" style={{ color: C.taupe }}>Selected client&apos;s session: {selectedBundle.session.sessionDate} at {selectedBundle.session.sessionTime || "TBD"}.</p>}
+                {selectedBundle.session?.sessionDate && <p className="text-[11px] mt-3" style={{ color: C.taupe }}>Selected client's session: {selectedBundle.session.sessionDate} at {selectedBundle.session.sessionTime || "TBD"}.</p>}
               </>
             )}
           </Card>
@@ -4171,7 +4127,7 @@ function SocialPage({ state, actions }) {
     <div className="space-y-4">
       <p className="ecc-display text-2xl" style={{ color: C.ink }}>Social Messaging</p>
       <p className="text-sm max-w-2xl" style={{ color: C.charcoal }}>
-        Comment-to-DM keyword automation on Instagram. Cold-DMing isn&apos;t possible under Meta&apos;s rules — this only fires on a
+        Comment-to-DM keyword automation on Instagram. Cold-DMing isn't possible under Meta's rules — this only fires on a
         user-initiated comment or story reply, then logs the lead straight into Inquiries.
       </p>
       <Card className="p-5 flex items-center justify-between">
@@ -4192,7 +4148,7 @@ function SocialPage({ state, actions }) {
         {rules.map((rule, index) => (
           <div key={rule.id || rule.keyword} className="flex items-center justify-between py-3" style={{ borderTop: index === 0 ? "none" : `1px solid ${C.line}` }}>
             <div>
-              <p className="text-sm font-medium" style={{ color: C.ink }}>&quot;{rule.keyword}&quot;</p>
+              <p className="text-sm font-medium" style={{ color: C.ink }}>"{rule.keyword}"</p>
               <p className="text-xs" style={{ color: C.charcoal }}>{rule.reply}</p>
             </div>
             <Pill>{rule.count} triggered</Pill>
@@ -4554,9 +4510,6 @@ function TemplatesPage() {
     const handler = (event) => newTemplate(event.detail?.type || tab);
     window.addEventListener("eccs:create-template", handler);
     return () => window.removeEventListener("eccs:create-template", handler);
-    // newTemplate only closes over `tab` (already a dep) and reads `data` through the
-    // setState updater, so it doesn't need to be in deps here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
   if (editing && current) {
